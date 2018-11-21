@@ -2,9 +2,6 @@
 
 import numpy as np
 np.set_printoptions(threshold=np.inf)
-#import pandas as pd #Pandas has multiple functions, including providing 'data_frame' objects that can be used for visualizing and analyzing data
-#from matplotlib import pyplot as plt
-#from PIL import Image
 import os
 
 
