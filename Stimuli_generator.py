@@ -47,8 +47,9 @@ for ii in range(0, 256):
         for mm in range(0, 8):
           image_array[(kk*16)+4+mm:(kk*16)+6+mm, ((jj+1)*16)-5-mm:((jj+1)*16)-4-mm, ii] = 0
 
-image_array.astype(float) #Cast the image_array as the appropriate Numpy type
-
+image_array = image_array.astype(np.float32) #Cast the image_array as the appropriate Numpy type
+#NB that float 32 is 32 bits; 8 bits = 1 byte, therefore float32 is 4 bytes (the same as a C++ float; an unspecified 
+  # numpy float is 8 bytes)
 
 
 ### Create and output a sub-set of the total stimlus set ###
@@ -74,11 +75,12 @@ for image_num in range(0, num_sub_images):
 
 #Output sub_image_array as a data file for use of firing rates
 sub_file = open("sub_file.gbo", "wb") #'wb' indicates that the file should be written in binary mode
+sub_image_array_flat = sub_image_array_flat.astype(np.float32)
 sub_image_array_flat.tofile("sub_file.gbo")
 
 #Unit test to check binary reading and writing is functioning as expected
 test_bytes = open("sub_file.gbo", mode="rb")
-test_output = np.fromfile("sub_file.gbo", dtype = np.float)
+test_output = np.fromfile("sub_file.gbo", dtype = np.float32)
 
 if np.array_equal(test_output, sub_image_array_flat) == 0:
   #Throw an error if the arrays are not the same when read
