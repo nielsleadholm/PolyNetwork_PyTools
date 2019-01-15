@@ -2,6 +2,9 @@
 
 import numpy as np
 import math
+import matplotlib.pyplot as plt
+import matplotlib
+import warnings
 
 ### The following tool sorts the output spikes from the Spike simulator (1D arrays) into 2D .csv files suitable for analysis by the Russo algorithm ###
 
@@ -12,17 +15,24 @@ import math
 
 #The Russo algorithm requires a 2D array where rows represent neuron IDs, and each neurons nth spike is indicated by the column
 #Each array entry specifies the time (in seconds) at which the spike occurred; empty entries are required to be filled with a NaN identifier
-#As the Russo algorithm does not accept neurons that never spike (i.e. empty rows), the following code adds a single spike at a random time-point for such neurons
+#As the Russo algorithm does not accept neurons that never spike (i.e. empty rows), the following code adds a single spike at a random time-point for such neurons;
+#This latter functionality is can be removed with the add_Russo_random_spike parameter below
 
 #The user must provide (below) parameters that were used in generating the Spike neural network simulation
 #Specify the number of neurons in each excitatory layer and each inhibitory layer, the number of layers, layer of interest, and the number of stimuli
+#max_plot_time determines how many ms of data should be plotted
 params = {'excit_dim' : 32*32,
 'inhib_dim' : 12*12,
 'num_layers' : 3,
 'extracted_layer' : 3,
 'num_stimuli' : 2,
+'add_Russo_random_spike' : 0,
 'run_test_suite' : 1,
-'manual_test_to_screen' : 0}
+'manual_test_to_screen' : 0,
+'max_plot_time' : 0.4,
+'plot_Boolean' : 0,
+'save_output_Boolean' : 1}
+
 
 #Loop through each stimulus
 def main(params):
@@ -34,38 +44,24 @@ def main(params):
 	for jj in range(0, params['num_stimuli']):
 		(spike_ids, spike_times) = load_spikes(jj) #NB that neurons IDs begin at 1
 
-		# print(np.shape(spike_ids))
-		# print(spike_ids[0:20])
-		# print(np.max(spike_ids))
-		# print(np.min(spike_ids))
-		# print(np.shape(spike_times))
 		extracted_mask = extract_mask(params, spike_ids)
-
-		#print(extracted_mask)
-		# print(np.shape(extracted_mask))
 
 		(extracted_ids, extracted_times) = extract_spikes(spike_ids, spike_times, extracted_mask)
 
-		# print(np.shape(extracted_ids))
-		# print(np.shape(extracted_times))
-		# print(extracted_ids[0:5])
-		# print(extracted_times[0:5])
-
 		max_spikes = np.max(np.bincount(extracted_ids)) #Find the number of spikes assoc. with the max-spiking neuron
-		# print(max_spikes)
 
 		Russo_array = initialize_Russo(params, max_spikes)
 
-		# print(np.shape(Russo_array))
-		# print(Russo_array[0:5, 0:5])
-
 		Russo_array = populate_Russo(params, extracted_ids, extracted_times, Russo_array)
 
-		# print(Russo_array[0:20, 0:5])
-		# print(np.shape(Russo_array))
+		if params['plot_Boolean'] == 1:
+			#The plot function will generate a RunTime warning due to a NaN comparison; however, the expected output of this code is correct, so the warning is not displayed
+			with warnings.catch_warnings():
+				warnings.simplefilter("ignore")
+				plot_Russo(params, Russo_array, jj)
 
-		#Output file as CSV
-		#np.savetxt("posttraining_stim" + str(jj+1) + "_Russo.csv", Russo_array, delimiter=',')
+		if params['save_output_Boolean'] == 1:
+			np.savetxt("posttraining_stim" + str(jj+1) + "_Russo.csv", Russo_array, delimiter=',')
 
 	return 0
 
@@ -91,7 +87,6 @@ def extract_spikes(spike_ids, spike_times, extracted_mask):
 	
 	return (extracted_ids, extracted_times)
 
-
 #Initialize a NaN array with rows = number of unique neurons in the layer, and columns = number of spikes of the maximally active neuron
 def initialize_Russo(params, max_spikes):
 	Russo_array = np.zeros([params['excit_dim'], max_spikes])
@@ -108,12 +103,25 @@ def populate_Russo(params, extracted_ids, extracted_times, Russo_array):
 	  Russo_array[ii, 0:(np.size(np.take(extracted_times, temp_mask)))] = np.take(extracted_times, temp_mask)
 	  #print(Russo_array[ii, 0:-1])
 
-	  if math.isnan(Russo_array[ii, 0]) == 1: #If the first element is NaN, the entire row is (i.e. the neuron never spiked)
+	  if ((math.isnan(Russo_array[ii, 0]) == 1) and (params['add_Russo_random_spike'] == 1)): #If the first element is NaN, the entire row is (i.e. the neuron never spiked)
 	    Russo_array[ii, 0] = np.random.random()*np.max(extracted_times) #Assigns the neuron a single spike, the time of which is sampled from a continuous uniform distribution
 
 	return(Russo_array)
 
+def plot_Russo(params, Russo_array, stimuli_iter):
+	plt.figure(stimuli_iter)
 
+	warnings.warn("NaN_Comparison", RuntimeWarning)
+
+	for ii in range(0, params['excit_dim']):
+		#Plot each neuron's spikes in turn; note the y-valuess are multiplied by (ii+1), so that the y-axis labels correspond to the neuron index (original simulation, beginning at 1), and not the Russo_array index (which begins at 0)
+		plt.scatter(Russo_array[ii,(Russo_array[ii, :]<params['max_plot_time'])], np.ones(len(Russo_array[ii,(Russo_array[ii, :]<params['max_plot_time'])]))*(ii+1), c='k', marker='.')
+	plt.show()
+
+
+
+
+### Testing Functions ###
 
 #Unit test for extract_mask function (extracting first layer)
 def test_extract_mask_FirstLayer():
@@ -154,8 +162,8 @@ def test_extract_spikes():
 
 #Unit test for populate Russo function when first layer is of interest
 def test_populate_Russo_FirstLayer(params):
-	test_params = {'extracted_layer' : 1, 'excit_dim' : 5}
-	test_extracted_ids = np.array([4, 1, 1, 3, 1, 2])
+	test_params = {'extracted_layer' : 1, 'excit_dim' : 5, 'add_Russo_random_spike' : params['add_Russo_random_spike']}
+	test_extracted_ids = np.array([5, 1, 1, 3, 1, 2])
 	test_max_spikes = 3
 	test_extracted_times = np.array([0.04, 0.08, 0.45, 0.9, 1.2, 4.0])
 	
@@ -169,7 +177,7 @@ def test_populate_Russo_FirstLayer(params):
 
 	#NB: only the first line is tested automatically
 	if params['manual_test_to_screen'] == 1:	
-		print("The expected Russo array (first layer extraction) is \n")
+		print("The expected Russo array (first layer extraction) is below; if add_Russo_random_spike==0, <float> will be NaN in observed. \n")
 		print(exp)
 		print("The expected Russo array shape (first layer extraction) is \n")
 		print(np.shape(exp))
@@ -181,7 +189,7 @@ def test_populate_Russo_FirstLayer(params):
 
 #Unit test for populate Russo function when higher layers are of interest
 def test_populate_Russo_HigherLayer(params):
-	test_params = {'extracted_layer' : 2, 'excit_dim' : 5}
+	test_params = {'extracted_layer' : 2, 'excit_dim' : 5, 'add_Russo_random_spike' : params['add_Russo_random_spike']}
 	test_extracted_ids = np.array([10, 6, 6, 8, 6, 7])
 	test_max_spikes = 3
 	test_extracted_times = np.array([0.04, 0.08, 0.45, 0.9, 1.2, 4.0])
@@ -196,7 +204,7 @@ def test_populate_Russo_HigherLayer(params):
 
 	#NB: only the first row is tested automatically; below offers a manual printout
 	if params['manual_test_to_screen'] == 1:	
-		print("The expected Russo array (higher layer extraction) is \n")
+		print("The expected Russo array (higher layer extraction) is below; if add_Russo_random_spike==0, <float> will be NaN in observed.\n")
 		print(exp)
 		print("The expected Russo array shape (higher layer extraction) is \n")
 		print(np.shape(exp))
@@ -215,53 +223,4 @@ def test_suite(params):
 	return
 
 main(params)
-
-
-
-
-#Load .txt files containing neuron id's and spikes
-# for jj in range(0, num_stimuli):
-# 	spike_ids = np.genfromtxt('output_spikes_posttraining_stim' + str(jj+1) +'SpikeIDs.txt')
-# 	spike_times = np.genfromtxt('output_spikes_posttraining_stim1SpikeTimes.txt')
-
-# 	#Extract the neurons of interest
-# 	extracted_mask = np.where((excit_dim*(extracted_layer-1) < spike_ids) & (spike_ids <= extracted_layer*excit_dim)) #Returns an array of indeces for the neurons in the layer of interest
-
-# 	extracted_ids = np.take(spike_ids, extracted_mask) #Returns an array of spike IDs, restricted to the layer of interest
-# 	extracted_times = np.take(spike_times, extracted_mask) #Returns an array of spike times, restricted to the layer of interest
-
-# 	extracted_ids = np.reshape(extracted_ids, len(extracted_ids[0])) #Re-shaping the array into a column array
-# 	extracted_ids = extracted_ids.astype(int) #Convert from spike output (float)
-
-# 	#Identify the neuron that spikes the max number of times, and return the number of times it spikes, used later
-# 	max_spikes = np.max(np.bincount(extracted_ids))
-
-# 	#Initialize a NaN array with rows = number of unique neurons in the layer, and columns = number of spikes of the maximally active neuron
-# 	Russo_array = np.zeros([excit_dim, max_spikes])
-# 	Russo_array[:, :] = np.nan
-
-# 	print(max_spikes)
-# 	print(np.max(extracted_times))
-
-# 	#Iterate through each neuron of interest, inserting its spikes into the Russo-suitable array; if a neuron never spikes, insert a single random spike
-# 	for ii in range(0, len(Russo_array[:, 0])):
-# 	  #Extract a binary mask containing the indeces of when the neuron of interest has fired
-# 	  temp_mask = np.where(extracted_ids == (excit_dim*(extracted_layer - 1) + ii + 1))
-# 	  #Use the mask to identify all the spike times associated with that neuron, and assign it to the 'Russo_array'
-# 	  Russo_array[ii, 0:(np.size(np.take(extracted_times, temp_mask)))] = np.take(extracted_times, temp_mask)
-# 	  if math.isnan(Russo_array[ii, 0]) == 1: #If the first element is NaN, the entire row is (i.e. the neuron never spiked)
-# 	    Russo_array[ii, 0] = np.random.random()*np.max(extracted_times) #Assigns the neuron a single spike, time of which is sampled from a continuous uniform distribution
-
-# 	#print(Russo_array[0:20, 0:5])
-# 	#print(np.shape(Russo_array))
-
-# 	#Output file as CSV
-# 	#np.savetxt("posttraining_stim" + str(jj+1) + "_Russo.csv", Russo_array, delimiter=',')
-
-
-
-
-
-
-
 
