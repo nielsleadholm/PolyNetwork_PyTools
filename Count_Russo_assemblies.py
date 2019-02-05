@@ -3,6 +3,7 @@
 import numpy as np
 from scipy.spatial.distance import pdist, squareform
 import warnings
+import time
 
 #This code can be used after applying the Russo algorithm to extract polychronous assemblies from parallel spike-train data
 #Using the extracted assemblies, the following algorithm will count the number of instances of each assembly, relative to a particular stimulus
@@ -12,29 +13,45 @@ import warnings
 #Definitions of parameters:
 #epsilon : cut-off margin, in seconds
 
-params = {'epsilon' : 0.003}
-Russo_assembly_times = np.array([0.000, 0.012, 0.018, 0.027, 0.042])
-Russo_assembly_ids = np.array([1, 4, 5, 8, 10]) - 1 #Note the neuron ids are indexed in the data from 1, so the minus 1 corrects for indexing into Python arrays
+params = {'epsilon' : 0.01}
+
+# Russo_assembly_times = np.array([0.000, 0.000, 0.000, 0.000, 0.000, 0.001, 0.001, 0.001, 0.002, 0.002, 0.002,])
+# Russo_assembly_ids = np.array([424, 328, 392, 360, 296, 192, 144, 180, 488, 552, 456]) - 1 #Note the neuron ids are indexed in the data from 1, so the minus 1 corrects for indexing into Python arrays
+
+
+Russo_assembly_times = np.array([0.000, 0.003, 0.015, 0.021, 0.027, 0.027])
+Russo_assembly_ids = np.array([177, 189, 153, 201, 165, 213]) - 1 #Note the neuron ids are indexed in the data from 1, so the minus 1 corrects for indexing into Python arrays
+
+# Russo_assembly_times = np.array([0.000, 0.012, 0.018, 0.027, 0.042])
+# Russo_assembly_ids = np.array([1, 4, 5, 8, 10]) - 1 #Note the neuron ids are indexed in the data from 1, so the minus 1 corrects for indexing into Python arrays
 
 
 def main(params, Russo_assembly_times, Russo_assembly_ids):
 
-	spike_data = create_example_dataset(Russo_assembly_times, Russo_assembly_ids)
+	#spike_data = create_example_dataset(Russo_assembly_times, Russo_assembly_ids)
 
-	print(spike_data)
+	all_data = np.genfromtxt('posttraining_stim1_Russo.csv', delimiter=',')
+	spike_data = all_data[:,:]
+
+	#print(spike_data[0:20, 0:15])
 
 	#Iterate through each assembly
 
-
+	start_time = time.time()
 
 	with warnings.catch_warnings():
 		warnings.simplefilter("ignore")
 		activation_array = iterate_through_candidates(params, Russo_assembly_times, Russo_assembly_ids, spike_data)
 
+	#*** Need to deal with a particular assembly being counted twice if the anchor neuron fires several times
+
+	#elapsed_time = time.time() - start_time
+
 	total_activations = np.sum(activation_array[0, :])
 	
-	print(activation_array)
+	#print(activation_array)
 	print(total_activations)
+	#print(elapsed_time)
 
 	return 0
 
@@ -84,7 +101,8 @@ def create_example_dataset(Russo_assembly_times, Russo_assembly_ids):
 def iterate_through_candidates(params, Russo_assembly_times, Russo_assembly_ids, spike_data):
 
 	warnings.warn("NaN_Comparison", RuntimeWarning) #Prevents the NaN comparison below from generating a run-time error
-	number_candidate_assemblies = np.sum(spike_data[0, :] >= 0)
+	number_candidate_assemblies = np.sum(spike_data[Russo_assembly_ids[0], :] >= 0)
+	print(number_candidate_assemblies)
 
 	# *** NB THE FIRST VERSION OF THIS CODE HAS ONLY BEEN WRITTEN TO HANDLE THE 1st NEURON IN THE INDEX/i.e. a single artificial assembly
 
