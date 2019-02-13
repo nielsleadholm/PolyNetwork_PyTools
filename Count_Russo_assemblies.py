@@ -3,6 +3,8 @@
 import numpy as np
 from scipy.spatial.distance import pdist, squareform
 import warnings
+import matplotlib.pyplot as plt
+import matplotlib
 
 #This code can be used after applying the Russo algorithm to extract polychronous assemblies from parallel spike-train data
 #Using the extracted assemblies, the following algorithm will count the number of instances of each assembly, relative to a particular stimulus
@@ -16,11 +18,13 @@ import warnings
 #epsilon1 : broad cut-off margin for spike times in assembly search, given in seconds; used to evaluate how much increasing epsilon changes the number of assemblies that are identified
 #dataset_duration : length of each data-set, in seconds
 
-params = {'epsilon0' : 0.003,
+params = {'epsilon0' : 0.0005,
 	'Russo_bin_size' : 0.003,
 	'number_stimuli' : 2,
-	'epsilon1' : 0.05,
-	'dataset_duration' : 400}
+	'epsilon1' : 0.015,
+	'dataset_duration' : 400,
+	'epsilon_iter_bool' : 1,
+	'epsilon_max' : 0.05}
 
 #Assemblies extracted from stimulus 2 dataset with bin width 3ms and pruning
 
@@ -35,15 +39,21 @@ params = {'epsilon0' : 0.003,
 #Assemblies extracted from stimulus 1 dataset with bin width 3ms and pruning
 
 #Assembly 27
-Russo_assembly_times = np.array([0.000, 0.000, 0.000, 0.000, 0.000, 0.003, 0.003, 0.003, 0.006, 0.006, 0.006,])
+Russo_assembly_times = np.array([0.000, 0.000, 0.000, 0.000, 0.000, 0.003, 0.003, 0.003, 0.006, 0.006, 0.006])
 Russo_assembly_ids = np.array([424, 328, 392, 360, 296, 192, 144, 180, 488, 552, 456]) - 1 #Note the neuron ids are indexed in the data from 1, so the minus 1 corrects for indexing into Python arrays
 
 
 def main(params, Russo_assembly_times, Russo_assembly_ids):
 
 	number_Russo_assemblies = 1
-	analysis_results = np.empty([params['number_stimuli'], params['number_stimuli'], number_Russo_assemblies, 12]) #Initialize array to hold all results; final value relates to the number of analysis metrics that are used
+	#Initialize array to hold main analysis results; final value relates to the number of analysis metrics that are used
+	analysis_results = np.empty([params['number_stimuli'], params['number_stimuli'], number_Russo_assemblies, 12])
 	#The first dimension of analysis_results is the stimuli associated with a particular dataset, while the second is the stimuli associated with the Russo-extracted assemblies
+
+
+
+	#Initialize array to hold results from iterating the epsilon value; the final value corresponds to the total number of steps that are taken, as an integer value
+	epsilon_results = np.empty([params['number_stimuli'], params['number_stimuli'], number_Russo_assemblies, int((params['epsilon_max']-params['epsilon0'])*1000)]) 
 
 	#Iterate through each data set; note the stimuli file names are indexed from 1
 	for dataset_iter in range (0, params['number_stimuli']):
@@ -66,11 +76,23 @@ def main(params, Russo_assembly_times, Russo_assembly_ids):
 		analysis_results = analysis_metrics(params, Russo_assembly_times, Russo_assembly_ids, spike_data, activation_array, 
 			analysis_results, dataset_iter, stimuli_iter, assembly_iter)
 
-		print(analysis_results[dataset_iter, stimuli_iter, assembly_iter, :])
+		#print(analysis_results[dataset_iter, stimuli_iter, assembly_iter, :])
+
+		#Run the specific 'epsilon analysis', where increasing values of epsilon are used for eventual plotting
+		epsilon_results = analysis_epsilon(params, Russo_assembly_times, Russo_assembly_ids, spike_data, activation_array, analysis_results,
+			epsilon_results, dataset_iter, stimuli_iter, assembly_iter)
+
+		print(epsilon_results[dataset_iter, stimuli_iter, assembly_iter, :])
+
+		x_axis = np.arange(1, len(epsilon_results[dataset_iter, stimuli_iter, assembly_iter, :])+1)
+		
+		plt.scatter(x_axis, epsilon_results[dataset_iter, stimuli_iter, assembly_iter, :])
+
 
 	#Run analyses that are perfomred to compare the activity of an assembly across datasets
 	comparative_metrics(params)
 
+	plt.show()
 	#Output raw results as a CSV file
 
 	#Information theory analysis, using the times at which the assemblies occur
@@ -224,6 +246,32 @@ def comparative_metrics(params):
 
 	return 0
 
+def analysis_epsilon(params, Russo_assembly_times, Russo_assembly_ids, spike_data, activation_array, analysis_results,
+			epsilon_results, dataset_iter, stimuli_iter, assembly_iter):
+
+	number_candidate_assemblies = int(analysis_results[dataset_iter, stimuli_iter, assembly_iter, 0])
+	epsilon = params['epsilon0']
+
+	#Iterate through each value of epsilon
+	for ii in range(0, len(epsilon_results[dataset_iter, stimuli_iter, assembly_iter, :])):
+
+		activations_count = 0
+		epsilon = epsilon + 0.0005 #How many ms epsilon is iterated by 
+
+		#Iterate through the number of candidate assemblies
+		for jj in range(0, number_candidate_assemblies):
+			first_neuron_spike_time = spike_data[Russo_assembly_ids[0], jj]
+		
+			#Call the boundary making function
+			(upper_bound, lower_bound) = create_boundaries(epsilon, Russo_assembly_times, first_neuron_spike_time)
+
+			#Call the assembly assembly activation evaluation function
+			activations_count = activations_count + evaluate_assembly_activation(Russo_assembly_times, Russo_assembly_ids, spike_data, upper_bound, lower_bound)
+		
+		#Update the value of the epsilon_results array
+		epsilon_results[dataset_iter, stimuli_iter, assembly_iter, ii] = activations_count/number_candidate_assemblies
+
+	return epsilon_results
 
 main(params, Russo_assembly_times, Russo_assembly_ids)
 
