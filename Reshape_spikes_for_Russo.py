@@ -21,17 +21,19 @@ import warnings
 #The user must provide (below) parameters that were used in generating the Spike neural network simulation
 #Specify the number of neurons in each excitatory layer and each inhibitory layer, the number of layers, layer of interest, and the number of stimuli
 #max_plot_time determines how many ms of data should be plotted
+#shuffle_iter randomly shuffles the neuron ids locations, so that their firing rates remain the same, but any temporal relationships are broken
 params = {'excit_dim' : 32*32,
 'inhib_dim' : 12*12,
 'num_layers' : 3,
 'extracted_layer' : 3,
 'num_stimuli' : 2,
-'add_Russo_random_spike' : 0,
+'add_Russo_random_spike' : 1,
 'run_test_suite' : 1,
 'manual_test_to_screen' : 0,
 'max_plot_time' : 0.4,
 'plot_Boolean' : 0,
-'save_output_Boolean' : 1}
+'save_output_Boolean' : 1,
+'shuffle_Boolean' : 1}
 
 
 #Loop through each stimulus
@@ -43,6 +45,9 @@ def main(params):
 
 	for jj in range(0, params['num_stimuli']):
 		(spike_ids, spike_times) = load_spikes(jj) #NB that neurons IDs begin at 1
+
+		if params['shuffle_Boolean'] == 1:
+			np.random.shuffle(spike_ids)
 
 		extracted_mask = extract_mask(params, spike_ids)
 
@@ -61,7 +66,10 @@ def main(params):
 				plot_Russo(params, Russo_array, jj)
 
 		if params['save_output_Boolean'] == 1:
-			np.savetxt("posttraining_stim" + str(jj+1) + "_Russo.csv", Russo_array, delimiter=',')
+			if params['shuffle_Boolean'] == 1:
+				np.savetxt("shuffled_posttraining_stim" + str(jj+1) + "_Russo.csv", Russo_array, delimiter=',')
+			else:
+				np.savetxt("posttraining_stim" + str(jj+1) + "_Russo.csv", Russo_array, delimiter=',')
 
 	return 0
 
