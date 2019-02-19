@@ -23,35 +23,22 @@ import pickle
 params = {'epsilon0' : 0.0005,
 	'Russo_bin_size' : 0.003,
 	'number_stimuli' : 2,
+	'network_layer': 3,
 	'epsilon1' : 0.015,
 	'dataset_duration' : 400,
 	'epsilon_iter_bool' : 1,
-	'epsilon_max' : 0.05,
+	'epsilon_iter_step' : 0.0005,
+	'epsilon_max' : 0.015,
 	'shuffle_Boolean' : 0,
-	'Poisson_Boolean' : 1}
+	'Poisson_Boolean' : 0}
 
 
-#Assemblies extracted from stimulus 1 dataset with bin width 3ms and pruning
-
-#Assembly 27
-Russo_assembly_times = np.array([0.000, 0.000, 0.000, 0.000, 0.000, 0.003, 0.003, 0.003, 0.006, 0.006, 0.006])
-Russo_assembly_ids = np.array([424, 328, 392, 360, 296, 192, 144, 180, 488, 552, 456]) - 1 #Note the neuron ids are indexed in the data from 1, so the minus 1 corrects for indexing into Python arrays
-
-
-#Assemblies extracted from stimulus 2 dataset with bin width 3ms and pruning
-
-#Assembly 28
-# Russo_assembly_times = np.array([0, 0, 4, 6, 9, 14])*params['Russo_bin_size']/1000
-# Russo_assembly_ids = np.array([189, 177, 153, 201, 165, 213]) - 1 #Note the neuron ids are indexed in the data from 1, so the minus 1 corrects for indexing into Python arrays
-
-#Assembly 30
-# Russo_assembly_times = np.array([0, 0, 0, 1, 1, 1, 1, 1, 1])*params['Russo_bin_size']/1000
-# Russo_assembly_ids = np.array([180, 144, 192, 424, 392, 328, 156, 488, 456]) - 1 #Note the neuron ids are indexed in the data from 1, so the minus 1 corrects for indexing into Python arrays
-
-
-def main(params, Russo_assembly_times, Russo_assembly_ids):
+def main(params):
 
 	number_Russo_assemblies = 1
+	# *** note need to change code to handle an arbitrary number of assemblies *** 
+
+
 	#Initialize array to hold main analysis results; final value relates to the number of analysis metrics that are used
 	analysis_results = np.empty([params['number_stimuli'], params['number_stimuli'], number_Russo_assemblies, 12])
 	#The first dimension of analysis_results is the stimuli associated with a particular dataset, while the second is the stimuli associated with the Russo-extracted assemblies
@@ -59,58 +46,67 @@ def main(params, Russo_assembly_times, Russo_assembly_ids):
 
 
 	#Initialize array to hold results from iterating the epsilon value; the final value corresponds to the total number of steps that are taken, as an integer value
-	epsilon_results = np.empty([params['number_stimuli'], params['number_stimuli'], number_Russo_assemblies, int((params['epsilon_max']-params['epsilon0'])*1000)]) 
+	epsilon_results = np.empty([params['number_stimuli'], params['number_stimuli'], number_Russo_assemblies, int((params['epsilon_max']-params['epsilon0'])/params['epsilon_iter_step'])]) 
 
 	#Iterate through each data set; note the stimuli file names are indexed from 1
 	for dataset_iter in range (0, params['number_stimuli']):
 		if params['shuffle_Boolean'] == 1:
 			#If shuffle_Boolean is set to 1, then loads shuffled data
-			spike_data = np.genfromtxt('shuffled_posttraining_stim' + str(dataset_iter+1) + '_Russo.csv', delimiter=',') 
+			spike_data = np.genfromtxt('shuffled_posttraining_stim' + str(dataset_iter+1) + '_layer' + str(params['network_layer']) +'_Russo.csv', delimiter=',') 
 		elif params['Poisson_Boolean'] == 1:
 			spike_data = np.genfromtxt('Poisson_spikes_stim1.csv', delimiter=',')
 		else:
-			spike_data = np.genfromtxt('posttraining_stim' + str(dataset_iter+1) + '_Russo.csv', delimiter=',') 
+			spike_data = np.genfromtxt('posttraining_stim' + str(dataset_iter+1) + '_layer' + str(params['network_layer']) + '_Russo.csv', delimiter=',') 
 
 
 		#Iterate through each stimulus
 		stimuli_iter = 0
 
 
-
+		assemblies_list = import_assemblies(params, stimuli_iter)
+		number_Russo_assemblies = len(assemblies_list[0])
+		print(number_Russo_assemblies)
+		
 		#Iterate through each assembly
-		assembly_iter=0
+		for assembly_iter in range((number_Russo_assemblies-1), number_Russo_assemblies):
 			#Within each assembly, define the neuron indeces that actually compose it, as well as their idealized spike times
 
-			#Remember lags need to be converted to ms
+			#Extract the neuron indeces and time delays for the current assembly of interest
+			Russo_assembly_ids = [IDs - 1 for IDs in list(map(int, assemblies_list[0][assembly_iter]))] #list/map/int converts the values into int, IDs - 1 changes indexing from 1 (Matlab) to from 0 (Python)
+			Russo_assembly_times = [lags * params['Russo_bin_size'] for lags in assemblies_list[1][assembly_iter]]
+
+			assembly_iter = 0
+
+			#Search for activations of an assembly (with both the primary and broad epsilon)
+			with warnings.catch_warnings():
+				warnings.simplefilter("ignore")
+				(activation_array, number_candidate_assemblies) = iterate_through_candidates(params, Russo_assembly_times, Russo_assembly_ids, spike_data)
+
+			#Run analyses that are performed for an assembly in a single dataset
+			analysis_results = analysis_metrics(params, Russo_assembly_times, Russo_assembly_ids, spike_data, activation_array, 
+				analysis_results, dataset_iter, stimuli_iter, assembly_iter)
+
+			#print(analysis_results[dataset_iter, stimuli_iter, assembly_iter, :])
+
+			#Run the specific 'epsilon analysis', where increasing values of epsilon are used for eventual plotting
+			epsilon_results = analysis_epsilon(params, Russo_assembly_times, Russo_assembly_ids, spike_data, number_candidate_assemblies, analysis_results,
+				epsilon_results, dataset_iter, stimuli_iter, assembly_iter)
+
+			print(epsilon_results[dataset_iter, stimuli_iter, assembly_iter, :])
+
+			x_axis = np.arange(1, len(epsilon_results[dataset_iter, stimuli_iter, assembly_iter, :])+1)*params['epsilon_iter_step']*1000
+			
+			plt.scatter(x_axis, epsilon_results[dataset_iter, stimuli_iter, assembly_iter, :])
 
 
-		#Search for activations of an assembly (with both the primary aand broad epsilon)
-		with warnings.catch_warnings():
-			warnings.simplefilter("ignore")
-			(activation_array, number_candidate_assemblies) = iterate_through_candidates(params, Russo_assembly_times, Russo_assembly_ids, spike_data)
-
-		#Run analyses that are performed for an assembly in a single dataset
-		analysis_results = analysis_metrics(params, Russo_assembly_times, Russo_assembly_ids, spike_data, activation_array, 
-			analysis_results, dataset_iter, stimuli_iter, assembly_iter)
-
-		#print(analysis_results[dataset_iter, stimuli_iter, assembly_iter, :])
-
-		#Run the specific 'epsilon analysis', where increasing values of epsilon are used for eventual plotting
-		epsilon_results = analysis_epsilon(params, Russo_assembly_times, Russo_assembly_ids, spike_data, number_candidate_assemblies, analysis_results,
-			epsilon_results, dataset_iter, stimuli_iter, assembly_iter)
-
-		print(epsilon_results[dataset_iter, stimuli_iter, assembly_iter, :])
-
-		x_axis = np.arange(1, len(epsilon_results[dataset_iter, stimuli_iter, assembly_iter, :])+1)
-		
-		plt.scatter(x_axis, epsilon_results[dataset_iter, stimuli_iter, assembly_iter, :])
-
-
-	#Run analyses that are perfomred to compare the activity of an assembly across datasets
+	#Run analyses that are performed to compare the activity of an assembly across datasets
 	comparative_metrics(params)
 
 	plt.show()
 	#Output raw results as a CSV file
+
+	with open('epsilon_results.data', 'wb') as filehandle:
+		pickle.dump(epsilon_results, filehandle)
 
 	#Information theory analysis, using the times at which the assemblies occur
 
@@ -119,14 +115,14 @@ def main(params, Russo_assembly_times, Russo_assembly_ids):
 	return 0
 
 #Import assemblies extracted from the Russo-algorithm
-# def import_assemblies():
-# 	#Load the Matlab data file
+def import_assemblies(params, stimuli_iter):
+	#Load the Matlab data file
 	
-# 	with open('Russo_extracted_assemblies.data', 'rb') as filehandle:
-# 		Assemblies_list = pickle.load(filehandle)
-
-# 	print(Assemblies_list)
+	#Note stimuli are index from 0 in Python, but from 1 in the file names/simulations
+	with open('Russo_extracted_assemblies_stim' + str(stimuli_iter+1) + '_layer' + str(params['network_layer']) + '.data', 'rb') as filehandle:
+		assemblies_list = pickle.load(filehandle)
 	
+	return assemblies_list
 
 
 #Create simple dataset for integration testing
@@ -158,9 +154,10 @@ def create_example_dataset(Russo_assembly_times, Russo_assembly_ids):
 #Iterate through candidate activations of an assembly; any time the first neuron of the prescribed assembly spikes, it is considered a candidate activation; defined as a separate function to assist appropriate warning handling
 def iterate_through_candidates(params, Russo_assembly_times, Russo_assembly_ids, spike_data):
 
+
 	warnings.warn("NaN_Comparison", RuntimeWarning) #Prevents the NaN comparison below from generating a run-time error
 	number_candidate_assemblies = np.sum(spike_data[Russo_assembly_ids[0], :] >= 0)
-	print(number_candidate_assemblies)
+	#print(number_candidate_assemblies)
 
 	activation_array = np.empty([2, 2, number_candidate_assemblies]) #Tracks whethr an assembly has activated, and at what time
 	#First dimension of activation array determines whether it is for the primary or broad epsilon
@@ -283,7 +280,7 @@ def analysis_epsilon(params, Russo_assembly_times, Russo_assembly_ids, spike_dat
 	for ii in range(0, len(epsilon_results[dataset_iter, stimuli_iter, assembly_iter, :])):
 
 		activations_count = 0
-		epsilon = epsilon + 0.0005 #How many ms epsilon is iterated by 
+		epsilon = epsilon + params['epsilon_iter_step'] #How many ms epsilon is iterated by 
 
 		#Iterate through the number of candidate assemblies
 		for jj in range(0, number_candidate_assemblies):
@@ -300,92 +297,9 @@ def analysis_epsilon(params, Russo_assembly_times, Russo_assembly_ids, spike_dat
 
 	return epsilon_results
 
-main(params, Russo_assembly_times, Russo_assembly_ids)
-
-
+main(params)
 
 #Output all the assemblies that were able to be separated in the training data-set by a factor of e.g. 80%
 
-
-
 #Check performance of these assemblies with the learned parameters on a hold-out dataset, before making comments on information content (otherwise can argue that have just over-fit the data to have high information)
-
-
-
-#Manually written out assemblies etc. that may be useful for testing; note that Russo assembly lags need to be multiplied by the Russo-bin width
-
-	# test_array2 = np.array([[0.,    0.02,  0.04,  0.06,    np.NaN]
-	# [5.,      np.NaN,   np.NaN,   np.NaN,   np.NaN]
-	# [5.,      np.NaN,   np.NaN,   np.NaN,   np.NaN]
-	# [0.012, 0.03,  0.056, 0.066,   np.NaN]
-	# [0.018, 0.036, 0.062, 0.072,   np.NaN]
-	# [5.,      np.NaN,   np.NaN,   np.NaN,   np.NaN]
-	# [5.,      np.NaN,   np.NaN,   np.NaN,   np.NaN]
-	# [0.027, 0.045, 0.071, 0.081,   np.NaN]
-	# [5.,      nan.NaN,   np.NaN,   nan.NaN,   np.NaN]
-	# [0.042, 0.06,  0.086, 0.096,   np.NaN]])
-
-#Assemblies extracted from stimulus 1 dataset with bin width 3ms and pruning
-
-# #Assembly 1
-# Russo_assembly_times = np.array([0, 5])/1000
-# Russo_assembly_ids = np.array([21, 85]) - 1 #Note the neuron ids are indexed in the data from 1, so the minus 1 corrects for indexing into Python arrays
-
-#Assembly 2
-# Russo_assembly_times = np.array([0, 3])/1000
-# Russo_assembly_ids = np.array([29, 93]) - 1 #Note the neuron ids are indexed in the data from 1, so the minus 1 corrects for indexing into Python arrays
-
-# #Assembly 3
-# Russo_assembly_times = np.array([0, 4])/1000
-# Russo_assembly_ids = np.array([60, 124]) - 1 #Note the neuron ids are indexed in the data from 1, so the minus 1 corrects for indexing into Python arrays
-
-# #Assembly 4
-# Russo_assembly_times = np.array([0, 4])/1000
-# Russo_assembly_ids = np.array([149, 161]) - 1 #Note the neuron ids are indexed in the data from 1, so the minus 1 corrects for indexing into Python arrays
-
-#Assembly 5
-# Russo_assembly_times = np.array([0, 2])/1000
-# Russo_assembly_ids = np.array([149, 197]) - 1 #Note the neuron ids are indexed in the data from 1, so the minus 1 corrects for indexing into Python arrays
-
-#Assembly 6
-# Russo_assembly_times = np.array([0, 3])/1000
-# Russo_assembly_ids = np.array([185, 161]) - 1 #Note the neuron ids are indexed in the data from 1, so the minus 1 corrects for indexing into Python arrays
-
-#Assembly 7
-# Russo_assembly_times = np.array([0, 2])/1000
-# Russo_assembly_ids = np.array([208, 220]) - 1 #Note the neuron ids are indexed in the data from 1, so the minus 1 corrects for indexing into Python arrays
-
-#Assembly 8
-# Russo_assembly_times = np.array([0, 1])/1000
-# Russo_assembly_ids = np.array([212, 224]) - 1 #Note the neuron ids are indexed in the data from 1, so the minus 1 corrects for indexing into Python arrays
-
-
-# #Assembly 22
-# Russo_assembly_times = np.array([0, 0, 5, 6])/1000
-# Russo_assembly_ids = np.array([178, 190, 202, 154]) - 1 #Note the neuron ids are indexed in the data from 1, so the minus 1 corrects for indexing into Python arrays
-
-#Assembly 23
-# Russo_assembly_times = np.array([0, 0, 3, 7])/1000
-# Russo_assembly_ids = np.array([191, 179, 155, 167]) - 1 #Note the neuron ids are indexed in the data from 1, so the minus 1 corrects for indexing into Python arrays
-
-# #Assembly 24
-# Russo_assembly_times = np.array([0, 0, 0, 5, 5])/1000
-# Russo_assembly_ids = np.array([188, 152, 176, 200, 372]) - 1 #Note the neuron ids are indexed in the data from 1, so the minus 1 corrects for indexing into Python arrays
-
-#Assembly 25
-# Russo_assembly_times = np.array([0.000, 0.003, 0.015, 0.021, 0.027, 0.027])
-# Russo_assembly_ids = np.array([177, 189, 153, 201, 165, 213]) - 1 #Note the neuron ids are indexed in the data from 1, so the minus 1 corrects for indexing into Python arrays
-
-#Assembly 26
-# Russo_assembly_times = np.array([0, 0, 0, 0, 2, 2])/1000
-# Russo_assembly_ids = np.array([168, 392, 424, 328, 552, 456]) - 1 #Note the neuron ids are indexed in the data from 1, so the minus 1 corrects for indexing into Python arrays
-
-#Assembly 27
-# Russo_assembly_times = np.array([0.000, 0.000, 0.000, 0.000, 0.000, 0.001, 0.001, 0.001, 0.002, 0.002, 0.002,])
-# Russo_assembly_ids = np.array([424, 328, 392, 360, 296, 192, 144, 180, 488, 552, 456]) - 1 #Note the neuron ids are indexed in the data from 1, so the minus 1 corrects for indexing into Python arrays
-
-#Assembly for testing
-# Russo_assembly_times = np.array([0.000, 0.012, 0.018, 0.027, 0.042])
-# Russo_assembly_ids = np.array([1, 4, 5, 8, 10]) - 1 #Note the neuron ids are indexed in the data from 1, so the minus 1 corrects for indexing into Python arrays
-
 
