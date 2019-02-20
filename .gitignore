@@ -1,2 +1,5 @@
 *.gbo
 *.png
+*.csv
+*.txt
+Data/
