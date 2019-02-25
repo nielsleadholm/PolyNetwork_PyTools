@@ -7,6 +7,7 @@ import warnings
 import matplotlib.pyplot as plt
 import matplotlib
 import pickle
+import time
 
 #This code can be used after applying the Russo algorithm to extract polychronous assemblies from parallel spike-train data
 #Using the extracted assemblies, the following algorithm will count the number of instances of each assembly, relative to a particular stimulus
@@ -20,30 +21,33 @@ import pickle
 #epsilon1 : broad cut-off margin for spike times in assembly search, given in seconds; used to evaluate how much increasing epsilon changes the number of assemblies that are identified
 #dataset_duration : length of each data-set, in seconds
 
-params = {'epsilon0' : 0.0005,
+params = {'epsilon0' : 0.00125,
 	'Russo_bin_size' : 0.003,
 	'number_stimuli' : 2,
 	'network_layer': 3,
 	'epsilon1' : 0.015,
-	'dataset_duration' : 400,
-	'epsilon_iter_bool' : 1,
+	'dataset_duration' : 50,
+	'epsilon_iter_bool' : 0,
 	'epsilon_iter_step' : 0.0005,
 	'epsilon_max' : 0.015,
 	'shuffle_Boolean' : 0,
-	'Poisson_Boolean' : 0}
+	'Poisson_Boolean' : 0,
+	'epsilon_plotting_Boolean' : 0,
+	'comparative_plotting_Boolean' : 1}
 
 
 def main(params):
 
-	number_Russo_assemblies = 1
-	# *** note need to change code to handle an arbitrary number of assemblies *** 
+
+	stimuli_iter = 0
+
+	assemblies_list = import_assemblies(params, stimuli_iter)
+	number_Russo_assemblies = 200 #len(assemblies_list[0])
 
 
 	#Initialize array to hold main analysis results; final value relates to the number of analysis metrics that are used
 	analysis_results = np.empty([params['number_stimuli'], params['number_stimuli'], number_Russo_assemblies, 12])
 	#The first dimension of analysis_results is the stimuli associated with a particular dataset, while the second is the stimuli associated with the Russo-extracted assemblies
-
-
 
 	#Initialize array to hold results from iterating the epsilon value; the final value corresponds to the total number of steps that are taken, as an integer value
 	epsilon_results = np.empty([params['number_stimuli'], params['number_stimuli'], number_Russo_assemblies, int((params['epsilon_max']-params['epsilon0'])/params['epsilon_iter_step'])]) 
@@ -60,22 +64,16 @@ def main(params):
 
 
 		#Iterate through each stimulus
-		stimuli_iter = 0
 
-
-		assemblies_list = import_assemblies(params, stimuli_iter)
-		number_Russo_assemblies = len(assemblies_list[0])
-		print(number_Russo_assemblies)
+		tic = time.time()
 		
 		#Iterate through each assembly
-		for assembly_iter in range((number_Russo_assemblies-1), number_Russo_assemblies):
+		for assembly_iter in range(0+2500, number_Russo_assemblies+2500):
 			#Within each assembly, define the neuron indeces that actually compose it, as well as their idealized spike times
 
 			#Extract the neuron indeces and time delays for the current assembly of interest
 			Russo_assembly_ids = [IDs - 1 for IDs in list(map(int, assemblies_list[0][assembly_iter]))] #list/map/int converts the values into int, IDs - 1 changes indexing from 1 (Matlab) to from 0 (Python)
 			Russo_assembly_times = [lags * params['Russo_bin_size'] for lags in assemblies_list[1][assembly_iter]]
-
-			assembly_iter = 0
 
 			#Search for activations of an assembly (with both the primary and broad epsilon)
 			with warnings.catch_warnings():
@@ -84,31 +82,55 @@ def main(params):
 
 			#Run analyses that are performed for an assembly in a single dataset
 			analysis_results = analysis_metrics(params, Russo_assembly_times, Russo_assembly_ids, spike_data, activation_array, 
-				analysis_results, dataset_iter, stimuli_iter, assembly_iter)
+				analysis_results, dataset_iter, stimuli_iter, assembly_iter - 2500)
 
 			#print(analysis_results[dataset_iter, stimuli_iter, assembly_iter, :])
 
 			#Run the specific 'epsilon analysis', where increasing values of epsilon are used for eventual plotting
 			epsilon_results = analysis_epsilon(params, Russo_assembly_times, Russo_assembly_ids, spike_data, number_candidate_assemblies, analysis_results,
-				epsilon_results, dataset_iter, stimuli_iter, assembly_iter)
+				epsilon_results, dataset_iter, stimuli_iter, assembly_iter - 2500)
+		
+		toc = time.time() - tic
+		print(toc)
 
-			print(epsilon_results[dataset_iter, stimuli_iter, assembly_iter, :])
+	# *** temporary fixing of this variable
+	dataset_iter = 0
 
-			x_axis = np.arange(1, len(epsilon_results[dataset_iter, stimuli_iter, assembly_iter, :])+1)*params['epsilon_iter_step']*1000
-			
-			plt.scatter(x_axis, epsilon_results[dataset_iter, stimuli_iter, assembly_iter, :])
+	if params['epsilon_plotting_Boolean'] == 1:
+
+		epsilon_x_axis = np.arange(1, len(epsilon_results[dataset_iter, stimuli_iter, 0, :])+1)*params['epsilon_iter_step']*1000
+
+		for assembly_iter in range(0, number_Russo_assemblies):
+			plt.scatter(epsilon_x_axis, epsilon_results[dataset_iter, stimuli_iter, assembly_iter, :])
+		
+		plt.show()
+		
+		#Output raw results as a CSV file
+
+		with open('epsilon_results.data', 'wb') as filehandle:
+			pickle.dump(epsilon_results, filehandle)
 
 
 	#Run analyses that are performed to compare the activity of an assembly across datasets
-	comparative_metrics(params)
+	difference_in_assembly_counts = comparative_metrics(params, analysis_results, stimuli_iter, number_Russo_assemblies)
+	
+	if params['comparative_plotting_Boolean'] == 1:
+		#Comparative plotting
+		comparative_x_axis = np.arange(0, number_Russo_assemblies)
 
-	plt.show()
-	#Output raw results as a CSV file
+		plt.scatter(comparative_x_axis, difference_in_assembly_counts, label='Difference in counts')
+		plt.scatter(comparative_x_axis, analysis_results[0, stimuli_iter, :, 0], label='Stimulus 1 presentation')
+		plt.scatter(comparative_x_axis, analysis_results[1, stimuli_iter, :, 0], label='Stimulus 2 presentation')
 
-	with open('epsilon_results.data', 'wb') as filehandle:
-		pickle.dump(epsilon_results, filehandle)
+		plt.title('Number of assembly occurences')
+		plt.legend()
+
+		plt.show()
+
 
 	#Information theory analysis, using the times at which the assemblies occur
+
+
 
 	#Output information theory analysis
 
@@ -190,7 +212,10 @@ def evaluate_assembly_activation(Russo_assembly_times, Russo_assembly_ids, spike
 	bool_iter = 1
 	#Note in the iteration, the first neuron in the Russo assembly is skipped, as by definition this is active at the necessary time
 	for kk in range(0, len(upper_bound)):
-		bool_iter = bool_iter * np.any((spike_data[Russo_assembly_ids[kk+1],:] <= upper_bound[kk]) & (spike_data[Russo_assembly_ids[kk+1],:] >= lower_bound[kk]))
+		with warnings.catch_warnings():
+			warnings.simplefilter("ignore")
+			warnings.warn("NaN_Comparison", RuntimeWarning) #Prevents the NaN comparison below from generating a run-time error
+			bool_iter = bool_iter * np.any((spike_data[Russo_assembly_ids[kk+1],:] <= upper_bound[kk]) & (spike_data[Russo_assembly_ids[kk+1],:] >= lower_bound[kk]))
 	
 	return bool_iter
 
@@ -261,15 +286,13 @@ def count_assembly_neuron_spikes(Russo_assembly_ids, spike_data):
 
 	return number_assembly_neuron_spikes
 
-def comparative_metrics(params):
+def comparative_metrics(params, analysis_results, stimuli_iter, number_Russo_assemblies):
 
-	#Ratio of assembly activation count for the stimulus it ostensbily encodes, vs other stimuli 
+	#Subtract the firing counts of each assembly for the two different stimuli from each other
+	#The stimulus of interest should be the first term in the subtraction
+	difference_in_assembly_counts = analysis_results[0, stimuli_iter, :, 0] - analysis_results[1, stimuli_iter, :, 0]
 
-	# ***need to consider accounting for >2 stimuli
-
-	#Ratio of assembly activation ratio (i.e. how many times the assembly activated when the first neuron in the assembly activated), for the stimulus it ostensibly encodes, vs other stimuli
-
-	return 0
+	return difference_in_assembly_counts
 
 def analysis_epsilon(params, Russo_assembly_times, Russo_assembly_ids, spike_data, number_candidate_assemblies, analysis_results,
 			epsilon_results, dataset_iter, stimuli_iter, assembly_iter):
