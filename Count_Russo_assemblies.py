@@ -18,14 +18,12 @@ import time
 #epsilon0 : primary cut-off margin for spike times in assembly search, given in seconds; note it falls on either side of the prescribed spike times, so an epsilon of 1.5ms corresponds to a window of 3ms
 #Russo_bin_size
 #number_stimuli
-#epsilon1 : broad cut-off margin for spike times in assembly search, given in seconds; used to evaluate how much increasing epsilon changes the number of assemblies that are identified
 #dataset_duration : length of each data-set, in seconds
 
-params = {'epsilon0' : 0.00125,
+params = {'epsilon0' : 0.0025,
 	'Russo_bin_size' : 0.003,
 	'number_stimuli' : 2,
 	'network_layer': 3,
-	'epsilon1' : 0.015,
 	'dataset_duration' : 50,
 	'epsilon_iter_bool' : 0,
 	'epsilon_iter_step' : 0.0005,
@@ -33,7 +31,7 @@ params = {'epsilon0' : 0.00125,
 	'shuffle_Boolean' : 0,
 	'Poisson_Boolean' : 0,
 	'epsilon_plotting_Boolean' : 0,
-	'comparative_plotting_Boolean' : 1}
+	'comparative_plotting_Boolean' : 0}
 
 
 def main(params):
@@ -42,7 +40,7 @@ def main(params):
 	stimuli_iter = 0
 
 	assemblies_list = import_assemblies(params, stimuli_iter)
-	number_Russo_assemblies = 200 #len(assemblies_list[0])
+	number_Russo_assemblies = 2 #len(assemblies_list[0])
 
 
 	#Initialize array to hold main analysis results; final value relates to the number of analysis metrics that are used
@@ -64,34 +62,69 @@ def main(params):
 
 
 		#Iterate through each stimulus
-
-		tic = time.time()
 		
+		all_functions_timer_start = time.time()
+
 		#Iterate through each assembly
-		for assembly_iter in range(0+2500, number_Russo_assemblies+2500):
+		for assembly_iter in range(0, number_Russo_assemblies):
 			#Within each assembly, define the neuron indeces that actually compose it, as well as their idealized spike times
 
+			extraction_timer_start = time.time()
+
 			#Extract the neuron indeces and time delays for the current assembly of interest
-			Russo_assembly_ids = [IDs - 1 for IDs in list(map(int, assemblies_list[0][assembly_iter]))] #list/map/int converts the values into int, IDs - 1 changes indexing from 1 (Matlab) to from 0 (Python)
-			Russo_assembly_times = [lags * params['Russo_bin_size'] for lags in assemblies_list[1][assembly_iter]]
+			#Notes on the below code: #list/map/int converts the values into int; IDs - 1 changes indexing from 1 (Matlab) to from 0 (Python)
+			Russo_assembly_ids = [IDs - 1 for IDs in list(map(int, assemblies_list[0][assembly_iter+500]))]
+			Russo_assembly_times = [lags * params['Russo_bin_size'] for lags in assemblies_list[1][assembly_iter+500]]
+
+			extraction_timer_total = time.time() - extraction_timer_start
+			#print("Extraction time is " + str(extraction_timer_total))
+
+			counting_timer_start = time.time()
 
 			#Search for activations of an assembly (with both the primary and broad epsilon)
 			with warnings.catch_warnings():
 				warnings.simplefilter("ignore")
+
+				iterateV1_timer_start = time.time()
+
 				(activation_array, number_candidate_assemblies) = iterate_through_candidates(params, Russo_assembly_times, Russo_assembly_ids, spike_data)
+				
+				iterateV1_timer_total = time.time() - iterateV1_timer_start
+				print("V1 time is " + str(iterateV1_timer_total))
+
+				iterateV2_timer_start = time.time()
+
+				iterate_through_candidates_fast(params, Russo_assembly_times, Russo_assembly_ids, spike_data, epsilon=params['epsilon0'])
+
+				iterateV2_timer_total = time.time() - iterateV2_timer_start
+				print("V2 time is " + str(iterateV2_timer_total))
+
+			counting_timer_total = time.time() - counting_timer_start
+			#print("Counting time is " + str(counting_timer_total))
+
+			analysis_timer_start = time.time()
 
 			#Run analyses that are performed for an assembly in a single dataset
 			analysis_results = analysis_metrics(params, Russo_assembly_times, Russo_assembly_ids, spike_data, activation_array, 
-				analysis_results, dataset_iter, stimuli_iter, assembly_iter - 2500)
+				analysis_results, dataset_iter, stimuli_iter, assembly_iter)
 
 			#print(analysis_results[dataset_iter, stimuli_iter, assembly_iter, :])
 
-			#Run the specific 'epsilon analysis', where increasing values of epsilon are used for eventual plotting
-			epsilon_results = analysis_epsilon(params, Russo_assembly_times, Russo_assembly_ids, spike_data, number_candidate_assemblies, analysis_results,
-				epsilon_results, dataset_iter, stimuli_iter, assembly_iter - 2500)
+			analysis_timer_total = time.time() - analysis_timer_start
+			#print("Analysis time is " + str(analysis_timer_total))
+
+			epsilon_timer_start = time.time()
+
+			if params['epsilon_iter_bool'] == 1:
+				#Run the specific 'epsilon analysis', where increasing values of epsilon are used for eventual plotting
+				epsilon_results = analysis_epsilon(params, Russo_assembly_times, Russo_assembly_ids, spike_data, number_candidate_assemblies, analysis_results,
+					epsilon_results, dataset_iter, stimuli_iter, assembly_iter)
 		
-		toc = time.time() - tic
-		print(toc)
+			epsilon_timer_total = time.time() - epsilon_timer_start
+			#print("Epsilon time is " + str(epsilon_timer_total))
+
+		all_functions_timer_total = time.time() - all_functions_timer_start
+		print(all_functions_timer_total)
 
 	# *** temporary fixing of this variable
 	dataset_iter = 0
@@ -118,9 +151,10 @@ def main(params):
 		#Comparative plotting
 		comparative_x_axis = np.arange(0, number_Russo_assemblies)
 
-		plt.scatter(comparative_x_axis, difference_in_assembly_counts, label='Difference in counts')
+
 		plt.scatter(comparative_x_axis, analysis_results[0, stimuli_iter, :, 0], label='Stimulus 1 presentation')
 		plt.scatter(comparative_x_axis, analysis_results[1, stimuli_iter, :, 0], label='Stimulus 2 presentation')
+		plt.scatter(comparative_x_axis, difference_in_assembly_counts, label='Difference in counts')
 
 		plt.title('Number of assembly occurences')
 		plt.legend()
@@ -176,26 +210,106 @@ def create_example_dataset(Russo_assembly_times, Russo_assembly_ids):
 #Iterate through candidate activations of an assembly; any time the first neuron of the prescribed assembly spikes, it is considered a candidate activation; defined as a separate function to assist appropriate warning handling
 def iterate_through_candidates(params, Russo_assembly_times, Russo_assembly_ids, spike_data):
 
+	warnings.warn("NaN_Comparison", RuntimeWarning) #Prevents the NaN comparison below from generating a run-time error
+	number_candidate_assemblies = np.sum(spike_data[Russo_assembly_ids[0], :] >= 0)
+	#print(number_candidate_assemblies)
+
+	activation_array = np.empty([2, number_candidate_assemblies]) #Tracks whethr an assembly has activated, and at what time
+	#First dimension of activation array determines whether it is for the primary or broad epsilon
+
+	for jj in range(0, number_candidate_assemblies):
+		first_neuron_spike_time = spike_data[Russo_assembly_ids[0], jj]
+
+		boundaries_timer_start = time.time()
+
+		(upper_bound, lower_bound) = create_boundaries(params['epsilon0'], Russo_assembly_times, first_neuron_spike_time)
+
+		boundaries_timer_total = time.time() - boundaries_timer_start
+		#print("Boundaries time is " + str(boundaries_timer_total)) 
+
+		evaluation_timer_start = time.time()
+
+		#activation_array[0, jj] = evaluate_assembly_activation(Russo_assembly_times, Russo_assembly_ids, spike_data, upper_bound, lower_bound)
+		
+		activation_array[0, jj] = evaluate_assembly_activation_fast(Russo_assembly_times, Russo_assembly_ids, spike_data, upper_bound, lower_bound)
+
+		evaluation_timer_total = time.time() - evaluation_timer_start
+		#print("Evaluation time is " + str(evaluation_timer_total))
+
+		activation_array[1, jj] = first_neuron_spike_time*activation_array[0, jj] #A non-zero value for the time of assembly activation is only assigned if the assembly activated
+
+	return (activation_array, number_candidate_assemblies)
+
+#Iterate through candidate activations of an assembly; any time the first neuron of the prescribed assembly spikes, it is considered a candidate activation; defined as a separate function to assist appropriate warning handling
+def iterate_through_candidates_fast(params, Russo_assembly_times, Russo_assembly_ids, spike_data, epsilon):
+
 
 	warnings.warn("NaN_Comparison", RuntimeWarning) #Prevents the NaN comparison below from generating a run-time error
 	number_candidate_assemblies = np.sum(spike_data[Russo_assembly_ids[0], :] >= 0)
 	#print(number_candidate_assemblies)
 
-	activation_array = np.empty([2, 2, number_candidate_assemblies]) #Tracks whethr an assembly has activated, and at what time
-	#First dimension of activation array determines whether it is for the primary or broad epsilon
+	activation_array = np.empty([2, number_candidate_assemblies]) #Stores whether an assembly has activated, and at what time
 
-	#Iterate through the primary (0) and the broad epsilon (1)
-	for ii in range(0, 2):
+	candidate_activations = spike_data[Russo_assembly_ids[0], 0:number_candidate_assemblies]
+	#print(np.shape(candidate_activations))
 
-		epsilon = params['epsilon' + str(ii)]
+	#Create an array with dimensions candidate_activations x upper_bound x lower_bound, to store booleans for each neuron in each candidate activation
+	activation_bool_array = np.empty([len(Russo_assembly_ids[1:]), number_candidate_assemblies])
 
-		for jj in range(0, number_candidate_assemblies):
-			first_neuron_spike_time = spike_data[Russo_assembly_ids[0], jj]
-			(upper_bound, lower_bound) = create_boundaries(epsilon, Russo_assembly_times, first_neuron_spike_time)
-			activation_array[ii, 0, jj] = evaluate_assembly_activation(Russo_assembly_times, Russo_assembly_ids, spike_data, upper_bound, lower_bound)
-			activation_array[ii, 1, jj] = first_neuron_spike_time*activation_array[ii, 0, jj] #A non-zero value for the time of assembly activation is only assigned if the assembly activated
+	# print(np.shape(activation_bool_array))
 
-	return (activation_array, number_candidate_assemblies)
+	#Create the upper and lower bounds
+
+	# *** note epsilon will now be implemented such that it is symetrical, i.e. defines the size of the entire bin ***
+	
+	#Notes on the below - np.reshape enables broadcasting, otherwise prevented by arrays having shape (n,) rather than (n,1)
+	upper_bound_array = (np.broadcast_to(candidate_activations, (len(Russo_assembly_ids[1:]), number_candidate_assemblies)) 
+		+ np.reshape(Russo_assembly_times[1:], (-1,1)) + epsilon/2)
+	lower_bound_array = (np.broadcast_to(candidate_activations, (len(Russo_assembly_ids[1:]), number_candidate_assemblies)) 
+		+ np.reshape(Russo_assembly_times[1:], (-1,1)) - epsilon/2) 
+
+	# print(np.shape(np.broadcast_to(candidate_activations, (len(Russo_assembly_ids[1:]), number_candidate_assemblies))))
+	# print(np.shape(np.reshape(Russo_assembly_times[1:], (-1,1))))
+
+	# print(np.shape(activation_bool_array))
+	# print(np.shape(upper_bound_array))
+
+	# print(Russo_assembly_times)
+
+	# print(upper_bound_array[:, 0:2]*1000)
+	# print(lower_bound_array[:, 0:2]*1000)
+
+
+	#test_array = np.transpose(np.broadcast_to(spike_data[Russo_assembly_ids[1:],:], (number_candidate_assemblies, len(Russo_assembly_ids[1:]), np.shape((spike_data[Russo_assembly_ids[1:],:]))[1])))
+
+	# print(np.shape(test_array))
+	# print(np.shape(upper_bound_array))
+
+
+	#Reshape the spike data so that broadcasting can be used during the application of the array-format boundaries
+	reshaped_spike_data = np.transpose(np.broadcast_to(spike_data[Russo_assembly_ids[1:],:], 
+			(number_candidate_assemblies, len(Russo_assembly_ids[1:]), np.shape((spike_data[Russo_assembly_ids[1:],:]))[1])))
+	activation_bool_array = np.any((reshaped_spike_data <= upper_bound_array) & (reshaped_spike_data >= lower_bound_array), axis=0)
+
+
+	# print(np.shape(activation_bool_array))
+
+	activation_bool = np.all(activation_bool_array, axis=0)
+
+	print(np.shape(activation_bool))
+
+	print(activation_bool)
+
+	#candidate_mask = spike_data[Russo_assembly_ids[0], :] >= 0 #Generates a boolean mask where the first neuron in the assembly has spiked
+	#print(np.shape(candidate_mask))
+
+	#candidate_activations = spike_data[Russo_assembly_ids[0], candidate_mask] #Returns the spike times of when the first neuron from the assembly
+
+	#print(np.shape(candidate_activations))
+	#print(candidate_activations)
+
+	return 0
+
 
 #Create the upper and lower limits of the spike times
 def create_boundaries(epsilon, Russo_assembly_times, first_neuron_spike_time):
@@ -219,12 +333,29 @@ def evaluate_assembly_activation(Russo_assembly_times, Russo_assembly_ids, spike
 	
 	return bool_iter
 
+def evaluate_assembly_activation_fast(Russo_assembly_times, Russo_assembly_ids, spike_data, upper_bound, lower_bound):
+
+	#upper_bound.reshape((len(upper_bound), 0))
+	#lower_bound.reshape((len(lower_bound), 0))
+
+	with warnings.catch_warnings():
+		warnings.simplefilter("ignore")
+		warnings.warn("NaN_Comparison", RuntimeWarning) #Prevents the NaN comparison below from generating a run-time error
+
+		#print(np.less_equal(spike_data[Russo_assembly_ids[1:],:], upper_bound))
+		activation_bool_array = np.any(((spike_data[Russo_assembly_ids[1:],:] <= upper_bound[:, None]) & (spike_data[Russo_assembly_ids[1:],:] >= lower_bound[:, None])), axis=1)
+
+		activation_bool = np.all(activation_bool_array)
+	
+	return activation_bool
+
+
 def analysis_metrics(params, Russo_assembly_times, Russo_assembly_ids, spike_data, activation_array, analysis_results, dataset_iter, stimuli_iter, assembly_iter):
 	
 	### Results using primary epsilon ###
 
 	#Total count of assembly activations
-	analysis_results[dataset_iter, stimuli_iter, assembly_iter, 0] = np.sum(activation_array[0, 0, :])
+	analysis_results[dataset_iter, stimuli_iter, assembly_iter, 0] = np.sum(activation_array[0, :])
 
 	with warnings.catch_warnings():
 		warnings.simplefilter("ignore")
@@ -263,17 +394,6 @@ def analysis_metrics(params, Russo_assembly_times, Russo_assembly_ids, spike_dat
 	analysis_results[dataset_iter, stimuli_iter, assembly_iter, 9] = (analysis_results[dataset_iter, stimuli_iter, assembly_iter, 3] /
 		params['dataset_duration'])
 
-
-	### Results using broad epsilon ###
-
-	#Epsilon sensitivity: ratio of assemblies captured with broad epsilon
-	#Ratio of assembly activations to spiking of the first neuron in the assembly
-	analysis_results[dataset_iter, stimuli_iter, assembly_iter, 10] = (np.sum(activation_array[1, 0, :]) /
-		number_assembly_neuron_spikes[0])
-
-	#Difference between ratio of assembly activations for primary vs broad epsilon 
-	analysis_results[dataset_iter, stimuli_iter, assembly_iter, 11] = (analysis_results[dataset_iter, stimuli_iter, assembly_iter, 10] - 
-		analysis_results[dataset_iter, stimuli_iter, assembly_iter, 4])
 
 	return analysis_results
 
