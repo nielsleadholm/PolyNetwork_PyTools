@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 #information content in the firing rates of the neurons
 
 params = {'number_stimuli' : 2,
-	'network_layer': 3,
+	'network_layer': 1,
 	'number_of_presentations' : 50,
 	'duration_of_presentations' : 1,
 	'excit_dim' : 32*32,
@@ -34,7 +34,7 @@ def main():
 	FR_dic = dict() #Stores arrays containing the firing rates of each neuron, for each stimulus presentation
 	mean_FR_dic = dict() #Stores the mean firing rates of each neuron for a given stimulus presentation
 	#Extract the mean firing rates
-	vector_size = params['excit_dim']*params['num_layers'] + params['inhib_dim']*params['num_layers']
+	vector_size = params['excit_dim'] #params['excit_dim']*params['num_layers'] + params['inhib_dim']*params['num_layers']
 	for stimuli_iter in range(0, params['number_stimuli']):
 		FR_dic[stimuli_iter] = extract_firing_rates(params, stimuli_iter, data_dic, vector_size)
 		mean_FR_dic[stimuli_iter] = find_mean_firing_rates(params, FR_dic[stimuli_iter], vector_size)
@@ -91,7 +91,7 @@ def extract_firing_rates(params, stimuli_iter, data_dic, vector_size):
 	  
 	  #Iterate through each neuron ID, counting the total number of appearances in the masked-array
 	  for ID_iter in range(0, vector_size):
-	    FR_array[ID_iter][presentation_iter] = np.count_nonzero(data_dic[stimuli_iter]["ids"][mask] == ID_iter)
+	    FR_array[ID_iter][presentation_iter] = np.count_nonzero(data_dic[stimuli_iter]["ids"][mask] == ID_iter+((params['network_layer']-1)*vector_size))
 	  
 	  #Divide these values by the duration of the presentation
 	  FR_array[:][presentation_iter] = FR_array[:][presentation_iter] / params['duration_of_presentations']
