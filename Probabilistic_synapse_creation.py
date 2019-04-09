@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 #prob_connection can be set to 1 if a form of all-to-all connectivity is desired
 #mult_synapses defines, if a connection exists, the precise number of synapses shared
 #delay_max is the maximum synaptic delay in seconds
-params = {'prob_connection' : 1,
+params = {'prob_connection' : 0.75,
 'mult_synapses' : 4,
 'delay_max' : 0.010,
 'weight_min' : 0.1,
@@ -31,9 +31,8 @@ def main(params):
 	input_IDs_list, output_IDs_list, num_connections = sample_connections(params)
 	delays_list = generate_delays(params, num_connections)
 	weights_list = generate_weights(params, num_connections)
-
-	plt.hist(delays_list)
-	plt.show()
+	
+	output_synapse_data(input_IDs_list, output_IDs_list, delays_list, weights_list)
 
 	return 0
 
@@ -83,6 +82,71 @@ def generate_weights(params, num_connections):
 			weights_list.append((params['weight_max'] - params['weight_min']) * np.random.uniform() + params['weight_min'])
 
 	return weights_list
+
+def output_synapse_data(input_IDs_list, output_IDs_list, delays_list, weights_list):
+
+	#Overwrite any earlier generated connectivity data files
+	with open('Connectivity_Data.syn', 'wb') as f1:
+		#First convert the list into a numpy array and then specify data type to enable binary reading in C++ later
+		input_IDs_list = np.asarray(input_IDs_list)
+		input_IDs_list = input_IDs_list.astype(np.float32)
+		print(len(input_IDs_list))
+		print(input_IDs_list[1000:1005])
+		f1.write(input_IDs_list)
+
+	#Append to the newly created connectivity data file
+	with open('Connectivity_Data.syn', 'ab') as f2:
+		output_IDs_list = np.asarray(output_IDs_list)
+		output_IDs_list = output_IDs_list.astype(np.float32)
+		print(len(output_IDs_list))
+		print(output_IDs_list[1000:1005])
+		f2.write(output_IDs_list)
+
+	with open('Connectivity_Data.syn', 'ab') as f3:
+		weights_list = np.asarray(weights_list)
+		weights_list = weights_list.astype(np.float32)
+		print(len(weights_list))
+		print(weights_list[1000:1005])
+		f3.write(weights_list)
+
+	with open('Connectivity_Data.syn', 'ab') as f4:
+		delays_list = np.asarray(delays_list)
+		delays_list = delays_list.astype(np.float32)
+		print(len(delays_list))
+		print(delays_list[1000:1005])
+		f4.write(delays_list)
+
+# def output_synapse_data_SeparateFiles(input_IDs_list, output_IDs_list, delays_list, weights_list):
+
+# 	with open('input_IDs_list.syn', 'wb') as f1:
+# 		#First convert the list into a numpy array and then specify data type to enable binary reading in C++ later
+# 		input_IDs_list = np.asarray(input_IDs_list)
+# 		input_IDs_list = input_IDs_list.astype(np.float32)
+# 		print(len(input_IDs_list))
+# 		print(input_IDs_list[70:100])
+# 		f1.write(input_IDs_list)
+
+# 	with open('output_IDs_list.syn', 'wb') as f2:
+# 		output_IDs_list = np.asarray(output_IDs_list)
+# 		output_IDs_list = output_IDs_list.astype(np.float32)
+# 		print(len(output_IDs_list))
+# 		print(output_IDs_list[70:100])
+# 		f2.write(output_IDs_list)
+
+# 	with open('delays_list.syn', 'wb') as f3:
+# 		delays_list = np.asarray(delays_list)
+# 		delays_list = delays_list.astype(np.float32)
+# 		print(len(delays_list))
+# 		print(delays_list[0:5])
+# 		f3.write(delays_list)
+
+# 	with open('weights_list.syn', 'wb') as f4:
+# 		weights_list = np.asarray(weights_list)
+# 		weights_list = weights_list.astype(np.float32)
+# 		print(len(weights_list))
+# 		print(weights_list[0:5])
+# 		f4.write(weights_list)
+
 
 main(params)
 
