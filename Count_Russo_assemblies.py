@@ -18,29 +18,33 @@ import time
 #epsilon0 : primary cut-off margin for spike times in assembly search, given in seconds; note it falls covers both sides of the prescribed spike times, so an epsilon of 3ms corresponds to a bin/window of 3ms
 #Russo_bin_size
 #number_stimuli
-#dataset_duration : length of each data-set, in seconds
+#number_of_presentations : how many times each stimulus is presented in the datasets
+#duration_of_presentations : length of each stimulus presentation, in seconds
 
-params = {'epsilon0' : 0.0005,
+params = {'epsilon0' : 0.004,
 	'Russo_bin_size' : 0.003,
 	'number_stimuli' : 2,
-	'network_layer': 3,
-	'dataset_duration' : 50,
-	'epsilon_iter_bool' : 1,
+	'network_layer': 1,
+	'number_of_presentations' : 5,
+	'duration_of_presentations' : 0.2,
+	'epsilon_iter_bool' : 0,
 	'epsilon_iter_step' : 0.00025,
 	'epsilon_max' : 0.015,
 	'shuffle_Boolean' : 0,
 	'Poisson_Boolean' : 0,
-	'epsilon_plotting_Boolean' : 1,
-	'comparative_plotting_Boolean' : 0}
+	'epsilon_plotting_Boolean' : 0,
+	'comparative_plotting_Boolean' : 0,
+	'information_theory_bool' : 1}
 
 
 def main(params):
 
 
-	stimuli_iter = 0
+	stimuli_iter = 1
 
 	assemblies_list = import_assemblies(params, stimuli_iter)
-	number_Russo_assemblies = 20 #len(assemblies_list[0])
+	number_Russo_assemblies = len(assemblies_list[0])
+	off_set_assembly_index = 0 # *** temporary variable to help look at Russo assemblies from different parts of the code
 
 	#Initialize array to hold main analysis results; final value relates to the number of analysis metrics that are used
 	analysis_results = np.empty([params['number_stimuli'], params['number_stimuli'], number_Russo_assemblies, 12])
@@ -48,6 +52,8 @@ def main(params):
 
 	#Initialize array to hold results from iterating the epsilon value; the final value corresponds to the total number of steps that are taken, as an integer value
 	epsilon_results = np.empty([params['number_stimuli'], params['number_stimuli'], number_Russo_assemblies, int((params['epsilon_max']-params['epsilon0'])/params['epsilon_iter_step'])]) 
+
+	information_theory_data = np.empty([params['number_stimuli'], number_Russo_assemblies])
 
 	#Iterate through each data set; note the stimuli file names are indexed from 1
 	for dataset_iter in range (0, params['number_stimuli']):
@@ -71,15 +77,17 @@ def main(params):
 
 			#Extract the neuron indeces and time delays for the current assembly of interest
 			#Notes on the below code: #list/map/int converts the values into int; IDs - 1 changes indexing from 1 (Matlab) to from 0 (Python)
-			Russo_assembly_ids = [IDs - 1 for IDs in list(map(int, assemblies_list[0][assembly_iter]))]
-			Russo_assembly_times = [lags * params['Russo_bin_size'] for lags in assemblies_list[1][assembly_iter]]
+			Russo_assembly_ids = [IDs - 1 for IDs in list(map(int, assemblies_list[0][assembly_iter + off_set_assembly_index]))]
+			Russo_assembly_times = [lags * params['Russo_bin_size'] for lags in assemblies_list[1][assembly_iter + off_set_assembly_index]]
 
 
 			#Search for activations of an assembly (with both the primary and broad epsilon)
 			with warnings.catch_warnings():
 				warnings.simplefilter("ignore")
-
 				(activation_array, number_candidate_assemblies) = find_assembly_activations(params, Russo_assembly_times, Russo_assembly_ids, spike_data, epsilon=params['epsilon0'])
+
+
+			information_theory_data[dataset_iter, assembly_iter] = information_theory_counting(params, activation_array)
 
 			#Run analyses that are performed for an assembly in a single dataset
 			analysis_results = analysis_metrics(params, Russo_assembly_times, Russo_assembly_ids, spike_data, activation_array, 
@@ -91,6 +99,43 @@ def main(params):
 					epsilon_results, dataset_iter, stimuli_iter, assembly_iter)
 		
 
+	if params['information_theory_bool'] == 1:
+
+		info_timer = time.time()
+
+		information_theory_results = information_theory_calculation(params, information_theory_data)
+
+		info_timer_total = time.time() - info_timer
+		print(info_timer_total)
+
+
+		fig, ax = plt.subplots()
+
+		plt.hist(information_theory_results, bins=np.array([0, 0.2, 0.4, 0.6, 0.8, 1.0]))
+		#ax.set_xlim(0, 1)
+		ax.set_ylabel('Number of Assemblies')
+		ax.set_xlabel('Information (bits)')
+
+		plt.show()
+
+
+		# *** test that information theory calculation is working by confirming that an idealized activation_array results in 1 bit of information
+		# information_theory_data[0, :] = params['number_of_presentations']
+		# information_theory_data[1, :] = 0
+
+		# information_theory_results = information_theory_calculation(params, information_theory_data)
+
+		# information_theory_data[0, :] = 0
+		# information_theory_data[1, :] = params['number_of_presentations']
+
+		# information_theory_results = information_theory_calculation(params, information_theory_data)
+
+		# # *** test in a case of no information (i.e. assembly activation is essentially a coin toss)
+		# information_theory_data[0, :] = params['number_of_presentations']/2
+		# information_theory_data[1, :] = params['number_of_presentations']/2
+
+		# information_theory_results = information_theory_calculation(params, information_theory_data)
+
 
 	# *** temporary fixing of this variable
 	dataset_iter = 0
@@ -99,11 +144,16 @@ def main(params):
 
 	if params['epsilon_plotting_Boolean'] == 1:
 
+		fig, ax = plt.subplots()
+
 		epsilon_x_axis = np.arange(1, len(epsilon_results[dataset_iter, stimuli_iter, 0, :])+1)*params['epsilon_iter_step']*1000
 
 		for assembly_iter in range(0, number_Russo_assemblies):
 			plt.scatter(epsilon_x_axis, epsilon_results[dataset_iter, stimuli_iter, assembly_iter, :])
 		
+		ax.set_ylim(0, 1)
+		ax.set_ylabel('Proportion of Assembly Activations')
+		ax.set_xlabel('Epsilon (ms)')
 		plt.show()
 		
 		#Output raw results as a CSV file
@@ -118,9 +168,9 @@ def main(params):
 		#Comparative plotting
 		comparative_x_axis = np.arange(0, number_Russo_assemblies)
 
-		plt.scatter(comparative_x_axis, analysis_results[0, stimuli_iter, :, 0], label='Stimulus 1 presentation')
-		plt.scatter(comparative_x_axis, analysis_results[1, stimuli_iter, :, 0], label='Stimulus 2 presentation')
-		plt.scatter(comparative_x_axis, difference_in_assembly_counts, label='Difference in counts')
+		plt.scatter(comparative_x_axis, analysis_results[0, stimuli_iter, :, 0], label='Stimulus 1 presentation', c='#e31a1c')
+		plt.scatter(comparative_x_axis, analysis_results[1, stimuli_iter, :, 0], label='Stimulus 2 presentation', c='#2171b5')
+		plt.scatter(comparative_x_axis, difference_in_assembly_counts, label='Difference in counts', c='#a922e7')
 
 		plt.title('Number of assembly occurences')
 		plt.legend()
@@ -234,15 +284,15 @@ def analysis_metrics(params, Russo_assembly_times, Russo_assembly_ids, spike_dat
 
 	#Average firing rate of first neuron in the assembly
 	analysis_results[dataset_iter, stimuli_iter, assembly_iter, 7] = (analysis_results[dataset_iter, stimuli_iter, assembly_iter, 1] /
-		params['dataset_duration'])
+		(params['number_of_presentations']*params['duration_of_presentations']))
 
 	#Average firing rate of maximally firing neuron in the assembly
 	analysis_results[dataset_iter, stimuli_iter, assembly_iter, 8] = (analysis_results[dataset_iter, stimuli_iter, assembly_iter, 2] /
-		params['dataset_duration'])
+		(params['number_of_presentations']*params['duration_of_presentations']))
 
 	#Average firing rate of minimally firing neuron in the assembly
 	analysis_results[dataset_iter, stimuli_iter, assembly_iter, 9] = (analysis_results[dataset_iter, stimuli_iter, assembly_iter, 3] /
-		params['dataset_duration'])
+		(params['number_of_presentations']*params['duration_of_presentations']))
 
 
 	return analysis_results
@@ -275,11 +325,82 @@ def analysis_epsilon(params, Russo_assembly_times, Russo_assembly_ids, spike_dat
 		activations_count = 0
 		epsilon = epsilon + params['epsilon_iter_step'] #How many ms epsilon is iterated by 
 
-		(activation_array, number_candidate_assemblies) = find_assembly_activations(params, Russo_assembly_times, Russo_assembly_ids, spike_data, epsilon)
+		with warnings.catch_warnings():
+			warnings.simplefilter("ignore")
+			(activation_array, number_candidate_assemblies) = find_assembly_activations(params, Russo_assembly_times, Russo_assembly_ids, spike_data, epsilon)
 
 		epsilon_results[dataset_iter, stimuli_iter, assembly_iter, ii] = np.sum(activation_array[0,:])/number_candidate_assemblies
 
 	return epsilon_results
+
+def information_theory_counting(params, activation_array):
+	#Information can be either encoded in the discrete on-off of a particular PNG to a particular stimulus, or it be a discretized low/high 'assembly rate'
+	#i.e. how many times over a given time interval is it active
+
+	#I will begin by implementing the former (i.e a given assembly can be on or off)
+
+	#For each stimulus, given that it has been presented, find the probability that a particular PNG is on at some point during the presentation period
+	#This will be the number of presentation periods in which the stimulus is presented, divided by the number of presentations of that stimulus
+	#Iterate through each time interval of presentation
+	activation_counter = 0
+	for ii in range(0, params['number_of_presentations']):
+	#Extract from assembly_activations if the assembly had any activations in that interval, and if it did then record a 1, 0 otherwise
+		activation_counter += np.any((activation_array[1, :] >= (ii*params['duration_of_presentations'])) & (activation_array[1, :] < ((ii+1)*params['duration_of_presentations'])))
+
+	#Return a value containing the number of presentations when the assembly was active
+	# *** In main() function, store this value in an array that has separate columns for each stimulus presented
+	return activation_counter
+
+def information_theory_calculation(params, information_theory_data):
+
+	#Information_theory_data is indexed by [dataset_iter, assembly_iter]; thus the row indicates which stimulus was presented, and the 
+	#column value indicates how many presentations were associated with at least one activation of that assembly
+
+
+	#print(information_theory_data)
+
+	no_math_error = 0.00000000000001
+
+	#The probabilities of a particular assembly being active for each stimulus
+	conditional_prob_array = information_theory_data/params['number_of_presentations']
+	#print(np.shape(conditional_prob_array))
+	marginal_prob_array = np.sum(information_theory_data, axis=0)/(params['number_of_presentations']*params['number_stimuli'])
+	#print(np.shape(marginal_prob_array))
+
+	#Find the total probability that a given assembly is on during a presentation (i.e. irrespective of what stimulus is presented)
+	#div_array = np.divide(conditional_prob_array[0, :], marginal_prob_array)
+	#print(np.shape(div_array))
+
+	#div_array = np.transpose(div_array[:,None])
+	#print(np.shape(div_array))
+
+	#print(np.shape(conditional_prob_array[0, :][:,None]))
+
+	#print(conditional_prob_array)
+
+
+	information1 = np.multiply(conditional_prob_array[0, :], np.log2(np.divide(conditional_prob_array[0, :], marginal_prob_array)+no_math_error))
+
+	# print(np.shape(information1))
+	# print(information1)
+
+	# print(1-conditional_prob_array[0, :])
+	# print(1-marginal_prob_array)
+	# print(np.divide(1-conditional_prob_array[0, :], (1-marginal_prob_array)+no_math_error)+no_math_error)
+
+
+
+	information2 = np.multiply(1-conditional_prob_array[0, :], np.log2(np.divide(1-conditional_prob_array[0, :], (1-marginal_prob_array+no_math_error))+no_math_error))
+
+	# print(information2)
+
+	# print("Total information is:")
+
+	information_theory_results = information1+information2
+
+
+	return information_theory_results
+
 
 main(params)
 
