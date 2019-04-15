@@ -2,5 +2,6 @@
 *.png
 *.csv
 *.txt
+*.syn
 Testing_ground.py
 Data/
