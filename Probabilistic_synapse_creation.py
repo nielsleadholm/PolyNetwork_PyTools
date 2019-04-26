@@ -17,14 +17,15 @@ import matplotlib.pyplot as plt
 #mult_synapses defines, if a connection exists, the precise number of synapses shared
 #delay_max is the maximum synaptic delay in seconds
 #num_layers should *not* include the input source layer
-params = {'prob_connection' : 0.6,
+params = {'prob_connection' : 0.90,
 'mult_synapses' : 4,
 'delay_max' : 0.010,
 'weight_min' : 0.01,
 'weight_max' : 0.1,
-'ffTrue_latFalse_bool' : 0,
+'ffTrue_latFalse_bool' : 1,
 'input_layer_dim' : 5*5,
 'output_layer_dim' : 5*5,
+'simulation_timestep' : 0.0001,
 'delay_STD' : 0.75,
 'num_layers' : 3}
 
@@ -79,7 +80,7 @@ def generate_delays(params, num_connections):
 		for jj in range(params['mult_synapses']):
 			delay_value += params['delay_max']/params['mult_synapses']
 			#Add normally distribute noise, corrected for the unit (seconds) of the delay
-			delays_list.append(abs(delay_value + (np.random.normal(0, params['delay_STD'])/1000)) + (10**(-5))) #Take the absolute value to ensure no negative delays
+			delays_list.append(abs(delay_value + (np.random.normal(0, params['delay_STD'])/1000)) + params['simulation_timestep']) #Take the absolute value to ensure no negative delays
 			#Note that in addition, a small value is added to the weight; this ensures the weights are sufficiently large so as to not cause floating point errors later in Spike
 
 	return delays_list
