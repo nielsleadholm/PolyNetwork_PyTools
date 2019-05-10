@@ -16,24 +16,24 @@ import warnings
 #The Russo algorithm requires a 2D array where rows represent neuron IDs, and each neurons nth spike is indicated by the column
 #Each array entry specifies the time (in seconds) at which the spike occurred; empty entries are required to be filled with a NaN identifier
 #As the Russo algorithm does not accept neurons that never spike (i.e. empty rows), the following code adds a single spike at a random time-point for such neurons;
-#This latter functionality is can be removed with the add_Russo_random_spike parameter below
+#This latter functionality can be removed with the add_Russo_random_spike parameter below
 
 #The user must provide (below) parameters that were used in generating the Spike neural network simulation
 #Specify the number of neurons in each excitatory layer and each inhibitory layer, the number of layers, layer of interest, and the number of stimuli
-#max_plot_time determines how many ms of data should be plotted
-#shuffle_iter randomly shuffles the neuron ids locations, so that their firing rates remain the same, but any temporal relationships are broken
-params = {'excit_dim' : 32*32,
-'inhib_dim' : 12*12,
+#max_plot_time determines how many ms of data should be plotted here
+#shuffle_iter randomly shuffles the neuron ids locations, so that their firing rates remain the same, but any fixed temporal relationships are broken
+params = {'excit_dim' : 5*5*2,
+'inhib_dim' : 5*5*2,
 'num_layers' : 3,
 'extracted_layer' : 3,
 'num_stimuli' : 2,
 'add_Russo_random_spike' : 1,
 'run_test_suite' : 1,
 'manual_test_to_screen' : 0,
-'max_plot_time' : 0.4,
-'plot_Boolean' : 0,
+'max_plot_time' : 0.2,
+'plot_Boolean' : 1,
 'save_output_Boolean' : 1,
-'shuffle_Boolean' : 1}
+'shuffle_Boolean' : 0}
 
 
 #Loop through each stimulus
@@ -67,16 +67,16 @@ def main(params):
 
 		if params['save_output_Boolean'] == 1:
 			if params['shuffle_Boolean'] == 1:
-				np.savetxt("shuffled_posttraining_stim" + str(jj+1) + "_Russo.csv", Russo_array, delimiter=',')
+				np.savetxt("./Processing_Data/shuffled_posttraining_stim" + str(jj+1) + "_layer" + str(params['extracted_layer']) + "_Russo.csv", Russo_array, delimiter=',')
 			else:
-				np.savetxt("posttraining_stim" + str(jj+1) + "_Russo.csv", Russo_array, delimiter=',')
+				np.savetxt("./Processing_Data/posttraining_stim" + str(jj+1) + "_layer" + str(params['extracted_layer']) + "_Russo.csv", Russo_array, delimiter=',')
 
 	return 0
 
 #Load spike ids and times
 def load_spikes(stimuli_iter):
-	spike_ids = np.genfromtxt('output_spikes_posttraining_stim' + str(stimuli_iter+1) +'SpikeIDs.txt')
-	spike_times = np.genfromtxt('output_spikes_posttraining_stim' + str(stimuli_iter+1) +'SpikeTimes.txt')
+	spike_ids = np.genfromtxt('./Processing_Data/output_spikes_posttraining_stim' + str(stimuli_iter+1) +'SpikeIDs.txt')
+	spike_times = np.genfromtxt('./Processing_Data/output_spikes_posttraining_stim' + str(stimuli_iter+1) +'SpikeTimes.txt')
 	return (spike_ids, spike_times)
 
 #Return extraction mask defining the spikes of interest

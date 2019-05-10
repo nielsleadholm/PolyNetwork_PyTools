@@ -24,27 +24,27 @@ import time
 params = {'epsilon0' : 0.004,
 	'Russo_bin_size' : 0.003,
 	'number_stimuli' : 2,
-	'network_layer': 1,
-	'number_of_presentations' : 5,
+	'network_layer': 3,
+	'number_of_presentations' : 50,
 	'duration_of_presentations' : 0.2,
-	'epsilon_iter_bool' : 0,
 	'epsilon_iter_step' : 0.00025,
 	'epsilon_max' : 0.015,
 	'shuffle_Boolean' : 0,
 	'Poisson_Boolean' : 0,
-	'epsilon_plotting_Boolean' : 0,
 	'comparative_plotting_Boolean' : 0,
-	'information_theory_bool' : 1}
+	'epsilon_iter_bool' : 1,
+	'information_theory_bool' : 0}
 
 
 def main(params):
 
 
-	stimuli_iter = 1
+	stimuli_iter = 0
 
 	assemblies_list = import_assemblies(params, stimuli_iter)
 	number_Russo_assemblies = len(assemblies_list[0])
-	off_set_assembly_index = 0 # *** temporary variable to help look at Russo assemblies from different parts of the code
+	print(number_Russo_assemblies)
+	off_set_assembly_index = 0 # *** temporary variable to help look at different subsets of the  Russo assemblies
 
 	#Initialize array to hold main analysis results; final value relates to the number of analysis metrics that are used
 	analysis_results = np.empty([params['number_stimuli'], params['number_stimuli'], number_Russo_assemblies, 12])
@@ -59,11 +59,11 @@ def main(params):
 	for dataset_iter in range (0, params['number_stimuli']):
 		if params['shuffle_Boolean'] == 1:
 			#If shuffle_Boolean is set to 1, then loads shuffled data
-			spike_data = np.genfromtxt('shuffled_posttraining_stim' + str(dataset_iter+1) + '_layer' + str(params['network_layer']) +'_Russo.csv', delimiter=',') 
+			spike_data = np.genfromtxt('./Processing_Data/shuffled_posttraining_stim' + str(dataset_iter+1) + '_layer' + str(params['network_layer']) +'_Russo.csv', delimiter=',') 
 		elif params['Poisson_Boolean'] == 1:
-			spike_data = np.genfromtxt('Poisson_spikes_stim1.csv', delimiter=',')
+			spike_data = np.genfromtxt('./Processing_Data/Poisson_spikes_stim1.csv', delimiter=',')
 		else:
-			spike_data = np.genfromtxt('posttraining_stim' + str(dataset_iter+1) + '_layer' + str(params['network_layer']) + '_Russo.csv', delimiter=',') 
+			spike_data = np.genfromtxt('./Processing_Data/posttraining_stim' + str(dataset_iter+1) + '_layer' + str(params['network_layer']) + '_Russo.csv', delimiter=',') 
 
 
 		#Iterate through each stimulus
@@ -81,7 +81,7 @@ def main(params):
 			Russo_assembly_times = [lags * params['Russo_bin_size'] for lags in assemblies_list[1][assembly_iter + off_set_assembly_index]]
 
 
-			#Search for activations of an assembly (with both the primary and broad epsilon)
+			#Search for activations of an assembly
 			with warnings.catch_warnings():
 				warnings.simplefilter("ignore")
 				(activation_array, number_candidate_assemblies) = find_assembly_activations(params, Russo_assembly_times, Russo_assembly_ids, spike_data, epsilon=params['epsilon0'])
@@ -98,6 +98,7 @@ def main(params):
 				epsilon_results = analysis_epsilon(params, Russo_assembly_times, Russo_assembly_ids, spike_data, number_candidate_assemblies, analysis_results,
 					epsilon_results, dataset_iter, stimuli_iter, assembly_iter)
 		
+
 
 	if params['information_theory_bool'] == 1:
 
@@ -116,8 +117,8 @@ def main(params):
 		ax.set_ylabel('Number of Assemblies')
 		ax.set_xlabel('Information (bits)')
 
+		plt.savefig('./Processing_Data/PNG_information_content_stim' + str(stimuli_iter+1) + '_layer' + str(params['network_layer']) +'.png')
 		plt.show()
-
 
 		# *** test that information theory calculation is working by confirming that an idealized activation_array results in 1 bit of information
 		# information_theory_data[0, :] = params['number_of_presentations']
@@ -142,7 +143,7 @@ def main(params):
 
 
 
-	if params['epsilon_plotting_Boolean'] == 1:
+	if params['epsilon_iter_bool'] == 1:
 
 		fig, ax = plt.subplots()
 
@@ -154,11 +155,12 @@ def main(params):
 		ax.set_ylim(0, 1)
 		ax.set_ylabel('Proportion of Assembly Activations')
 		ax.set_xlabel('Epsilon (ms)')
+		plt.savefig('./Processing_Data/Epsilon_curves_stim' + str(stimuli_iter+1) + '_layer' + str(params['network_layer']) +'.png')
 		plt.show()
 		
 		#Output raw results as a CSV file
-		with open('epsilon_results.data', 'wb') as filehandle:
-			pickle.dump(epsilon_results, filehandle)
+		# with open('./Processing_Data/epsilon_results.data', 'wb') as filehandle:
+		# 	pickle.dump(epsilon_results, filehandle)
 
 
 	#Run analyses that are performed to compare the activity of an assembly across datasets
@@ -192,7 +194,7 @@ def import_assemblies(params, stimuli_iter):
 	#Load the Matlab data file
 	
 	#Note stimuli are index from 0 in Python, but from 1 in the file names/simulations
-	with open('Russo_extracted_assemblies_stim' + str(stimuli_iter+1) + '_layer' + str(params['network_layer']) + '.data', 'rb') as filehandle:
+	with open('./Processing_Data/Russo_extracted_assemblies_stim' + str(stimuli_iter+1) + '_layer' + str(params['network_layer']) + '.data', 'rb') as filehandle:
 		assemblies_list = pickle.load(filehandle)
 	
 	return assemblies_list
@@ -317,7 +319,7 @@ def comparative_metrics(params, analysis_results, stimuli_iter, number_Russo_ass
 def analysis_epsilon(params, Russo_assembly_times, Russo_assembly_ids, spike_data, number_candidate_assemblies, analysis_results,
 			epsilon_results, dataset_iter, stimuli_iter, assembly_iter):
 
-	epsilon = params['epsilon0']
+	epsilon = params['epsilon_iter_step']
 
 	#Iterate through each value of epsilon
 	for ii in range(0, len(epsilon_results[dataset_iter, stimuli_iter, assembly_iter, :])):

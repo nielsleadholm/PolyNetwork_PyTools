@@ -8,14 +8,14 @@ import matplotlib.pyplot as plt
 #information content in the firing rates of the neurons
 
 params = {'number_stimuli' : 2,
-	'network_layer': 1,
+	'network_layer': 3,
 	'number_of_presentations' : 50,
-	'duration_of_presentations' : 1,
-	'excit_dim' : 32*32,
-	'inhib_dim' : 12*12,
+	'duration_of_presentations' : 0.2,
+	'excit_dim' : 5*5*2,
+	'inhib_dim' : 5*5*2,
 	'num_layers' : 3,
 	'mean_FR_visualization_bool' : 0,
-	'information_theory_bool' : 0}
+	'information_theory_bool' : 1}
 
 
 
@@ -49,6 +49,7 @@ def main():
 	ax.set_ylabel('Number of Neurons')
 	ax.set_xlabel('Information (bits)')
 
+	plt.savefig('./Processing_Data/FR_information_content_layer' + str(params['network_layer']) +'.png')
 	plt.show()
 
 	if params['mean_FR_visualization_bool'] == 1:
@@ -71,8 +72,8 @@ def extract_spike_data(params):
 		#Note the stimuli in the file names are index from 1, not 0
 		data_dic[ii] = pd.DataFrame(
 		  data = {
-		      "ids": np.fromfile("output_spikes_posttraining_stim" + str(ii+1) + "SpikeIDs.txt", dtype=np.int32, sep=' '),
-		      "times": np.fromfile("output_spikes_posttraining_stim" + str(ii+1) + "SpikeTimes.txt", dtype=np.float32, sep=' '),
+		      "ids": np.fromfile("./Processing_Data/output_spikes_posttraining_stim" + str(ii+1) + "SpikeIDs.txt", dtype=np.int32, sep=' '),
+		      "times": np.fromfile("./Processing_Data/output_spikes_posttraining_stim" + str(ii+1) + "SpikeTimes.txt", dtype=np.float32, sep=' '),
 		  }
 		)
 
@@ -94,7 +95,7 @@ def extract_firing_rates(params, stimuli_iter, data_dic, vector_size):
 	    FR_array[ID_iter][presentation_iter] = np.count_nonzero(data_dic[stimuli_iter]["ids"][mask] == ID_iter+((params['network_layer']-1)*vector_size))
 	  
 	  #Divide these values by the duration of the presentation
-	  FR_array[:][presentation_iter] = FR_array[:][presentation_iter] / params['duration_of_presentations']
+	  FR_array[:,presentation_iter] = FR_array[:,presentation_iter] / params['duration_of_presentations']
 
 	return FR_array
 
@@ -175,6 +176,7 @@ def information_theory_calculation(params, information_theory_dic):
 	information_mid = np.multiply(conditional_prob_array[:, 1], np.log2(np.divide(conditional_prob_array[:, 1], marginal_prob_array[:, 1]+no_math_error)+no_math_error))
 	information_high = np.multiply(conditional_prob_array[:, 2], np.log2(np.divide(conditional_prob_array[:, 2], marginal_prob_array[:, 2]+no_math_error)+no_math_error))
 	
+
 	information_theory_results = information_low + information_mid + information_high
 
 	return information_theory_results
