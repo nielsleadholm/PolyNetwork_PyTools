@@ -20,20 +20,25 @@ import time
 #number_stimuli
 #number_of_presentations : how many times each stimulus is presented in the datasets
 #duration_of_presentations : length of each stimulus presentation, in seconds
+#synchrony bool : check whether, if all lags detected by the Russo algorithm for a given assembly are treated as zero, how does this effect e.g. information content
+#templates_alt_stream_bool: check whether, if using the Russo assembly templates on the alternative stream, but where the neuron indices are corrected for that stream, how much information is present
 
-params = {'epsilon0' : 0.004,
+params = {'epsilon0' : 0.005,
 	'Russo_bin_size' : 0.003,
 	'number_stimuli' : 2,
 	'network_layer': 3,
+	'group_dim': 5*5,
 	'number_of_presentations' : 50,
 	'duration_of_presentations' : 0.2,
 	'epsilon_iter_step' : 0.00025,
 	'epsilon_max' : 0.015,
 	'shuffle_Boolean' : 0,
 	'Poisson_Boolean' : 0,
+	'synchrony_bool' : 0,
+	'templates_alt_stream_bool' : 1,
 	'comparative_plotting_Boolean' : 0,
-	'epsilon_iter_bool' : 1,
-	'information_theory_bool' : 0}
+	'epsilon_iter_bool' : 0,
+	'information_theory_bool' : 1}
 
 
 def main(params):
@@ -79,6 +84,13 @@ def main(params):
 			#Notes on the below code: #list/map/int converts the values into int; IDs - 1 changes indexing from 1 (Matlab) to from 0 (Python)
 			Russo_assembly_ids = [IDs - 1 for IDs in list(map(int, assemblies_list[0][assembly_iter + off_set_assembly_index]))]
 			Russo_assembly_times = [lags * params['Russo_bin_size'] for lags in assemblies_list[1][assembly_iter + off_set_assembly_index]]
+
+			#print(Russo_assembly_ids)
+			if params['templates_alt_stream_bool'] == 1:
+				if check_assembly_side(params, Russo_assembly_ids) == True:
+					for ii in range(len(Russo_assembly_ids)):
+						Russo_assembly_ids[ii] = Russo_assembly_ids[ii] + dataset_iter * params['group_dim']
+			#print(Russo_assembly_ids)
 
 
 			#Search for activations of an assembly
@@ -189,6 +201,14 @@ def main(params):
 
 	return 0
 
+#Check that an assembly isn't already for the alternative side of the stream, in which case discount it for the 'templates_alt_stream_bool' search
+def check_assembly_side(params, Russo_assembly_ids): 
+	for jj in range(len(Russo_assembly_ids)):
+		if Russo_assembly_ids[jj] >= params['group_dim']:
+			return False
+	return True
+
+
 #Import assemblies extracted from the Russo-algorithm
 def import_assemblies(params, stimuli_iter):
 	#Load the Matlab data file
@@ -209,7 +229,7 @@ def find_assembly_activations(params, Russo_assembly_times, Russo_assembly_ids, 
 	candidate_activations = spike_data[Russo_assembly_ids[0], 0:number_candidate_assemblies] #Array of spike times when the first neuron in the assembly spikes
 
 	#Create the upper and lower bounds
-	(upper_bound_array, lower_bound_array) = create_boundaries(epsilon, Russo_assembly_times, candidate_activations, number_candidate_assemblies)
+	(upper_bound_array, lower_bound_array) = create_boundaries(epsilon, Russo_assembly_times, candidate_activations, number_candidate_assemblies, synchrony_bool=params['synchrony_bool'])
 
 	#Assess if assemblies were active based on the now-defined boundaries
 	activation_array = evaluate_assembly_activation(Russo_assembly_times, Russo_assembly_ids, spike_data, upper_bound_array, lower_bound_array, number_candidate_assemblies, candidate_activations)
@@ -218,8 +238,14 @@ def find_assembly_activations(params, Russo_assembly_times, Russo_assembly_ids, 
 
 
 #Create the upper and lower limits of the spike times, in vectorized format
-def create_boundaries(epsilon, Russo_assembly_times, candidate_activations, number_candidate_assemblies):
+def create_boundaries(epsilon, Russo_assembly_times, candidate_activations, number_candidate_assemblies, synchrony_bool):
 	
+	#If checking for information/precision in a 'synchronous assembly' (i.e. assuming lags between neuron spikes were not significant), set assembly times to a zero vector
+	if synchrony_bool == 1:
+		#print(Russo_assembly_times[1:])
+		Russo_assembly_times[1:] = np.zeros(len(Russo_assembly_times[1:]))
+		#print(Russo_assembly_times[1:])
+
 	#Notes on the below - np.reshape enables broadcasting, which is sotherwise prevented by arrays having shape (n,) rather than (n,1)
 	#Also note the first assembly neuron is not included in the boundary arrays, as it is by definition within the boundary
 	upper_bound_array = (np.broadcast_to(candidate_activations, (len(Russo_assembly_times[1:]), number_candidate_assemblies)) 
@@ -365,6 +391,10 @@ def information_theory_calculation(params, information_theory_data):
 
 	#The probabilities of a particular assembly being active for each stimulus
 	conditional_prob_array = information_theory_data/params['number_of_presentations']
+
+	print('The maximum number of activations of a given assembly to stimulus 1 was ' + str(np.amax(information_theory_data[0,:])))
+	print('The number of assemblies that had this many activations to stimulus 1 was ' + str(sum(information_theory_data[0,:] == np.amax(information_theory_data[0,:]))))
+
 	#print(np.shape(conditional_prob_array))
 	marginal_prob_array = np.sum(information_theory_data, axis=0)/(params['number_of_presentations']*params['number_stimuli'])
 	#print(np.shape(marginal_prob_array))
