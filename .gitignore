@@ -5,3 +5,13 @@
 *.syn
 Testing_ground.py
 Data/
+Backup rough code/
+Dispersion_analysis.py
+Generate_figures(PolychronyOverTraining).py
+Generate_figures(PolychronyVsControls).py
+Poisson_ground_truth.py
+Processing_Data/
+Statistical_analysis(PolychronyOverTraining).py
+Statistical_analysis(PolychronyVsControls).py
+Stimuli_generator.py
+Visualize_Assembly_Counting.py
