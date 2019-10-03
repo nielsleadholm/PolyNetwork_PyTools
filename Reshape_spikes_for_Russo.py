@@ -22,15 +22,15 @@ import warnings
 #Specify the number of neurons in each excitatory layer and each inhibitory layer, the number of layers, layer of interest, and the number of stimuli
 #max_plot_time determines how many ms of data should be plotted here
 #shuffle_iter randomly shuffles the neuron ids locations, so that their firing rates remain the same, but any fixed temporal relationships are broken
-params = {'excit_dim' : 5*5*2,
-'inhib_dim' : 5*5*2,
+params = {'extracted_layer' : 3,
+'max_plot_time' : 0.4,
+'excit_dim' : 16*16*2,
+'inhib_dim' : None,
 'num_layers' : 3,
-'extracted_layer' : 3,
 'num_stimuli' : 2,
 'add_Russo_random_spike' : 1,
 'run_test_suite' : 1,
 'manual_test_to_screen' : 0,
-'max_plot_time' : 0.2,
 'plot_Boolean' : 1,
 'save_output_Boolean' : 1,
 'shuffle_Boolean' : 0}
@@ -124,6 +124,7 @@ def plot_Russo(params, Russo_array, stimuli_iter):
 	for ii in range(0, params['excit_dim']):
 		#Plot each neuron's spikes in turn; note the y-valuess are multiplied by (ii+1), so that the y-axis labels correspond to the neuron index (original simulation, beginning at 1), and not the Russo_array index (which begins at 0)
 		plt.scatter(Russo_array[ii,(Russo_array[ii, :]<params['max_plot_time'])], np.ones(len(Russo_array[ii,(Russo_array[ii, :]<params['max_plot_time'])]))*(ii+1), c='k', marker='.')
+		
 	plt.show()
 
 

@@ -27,7 +27,7 @@ params = {'epsilon0' : 0.005,
 	'Russo_bin_size' : 0.003,
 	'number_stimuli' : 2,
 	'network_layer': 3,
-	'group_dim': 5*5,
+	'group_dim': 16*16,
 	'number_of_presentations' : 50,
 	'duration_of_presentations' : 0.2,
 	'epsilon_iter_step' : 0.00025,
@@ -35,10 +35,10 @@ params = {'epsilon0' : 0.005,
 	'shuffle_Boolean' : 0,
 	'Poisson_Boolean' : 0,
 	'synchrony_bool' : 0,
-	'templates_alt_stream_bool' : 1,
+	'templates_alt_stream_bool' : False,
 	'comparative_plotting_Boolean' : 0,
-	'epsilon_iter_bool' : 0,
-	'information_theory_bool' : 1}
+	'epsilon_iter_bool' : True,
+	'information_theory_bool' : False}
 
 
 def main(params):

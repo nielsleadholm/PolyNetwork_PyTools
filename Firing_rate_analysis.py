@@ -8,11 +8,11 @@ import matplotlib.pyplot as plt
 #information content in the firing rates of the neurons
 
 params = {'number_stimuli' : 2,
-	'network_layer': 3,
+	'network_layer': 1,
 	'number_of_presentations' : 50,
 	'duration_of_presentations' : 0.2,
-	'excit_dim' : 5*5*2,
-	'inhib_dim' : 5*5*2,
+	'excit_dim' : 16*16*2,
+	'inhib_dim' : 16*16*2,
 	'num_layers' : 3,
 	'mean_FR_visualization_bool' : 0,
 	'information_theory_bool' : 1}
