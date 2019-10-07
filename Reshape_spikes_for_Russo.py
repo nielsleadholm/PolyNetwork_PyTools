@@ -20,34 +20,36 @@ import warnings
 
 #The user must provide (below) parameters that were used in generating the Spike neural network simulation
 #Specify the number of neurons in each excitatory layer and each inhibitory layer, the number of layers, layer of interest, and the number of stimuli
+#If using the 'binary network' architecture, _dim should specify the total size of each layer, and not the individual streams
 #max_plot_time determines how many ms of data should be plotted here
-#shuffle_iter randomly shuffles the neuron ids locations, so that their firing rates remain the same, but any fixed temporal relationships are broken
+#random_test_to_screen prints to screen additional tests that require visual inspection by the user
+#shuffle_Boolean randomly shuffles the neuron ids locations, so that their firing rates remain the same, but any fixed temporal relationships are broken
+
 params = {'extracted_layer' : 3,
-'max_plot_time' : 0.4,
-'excit_dim' : 16*16*2,
-'inhib_dim' : None,
-'num_layers' : 3,
-'num_stimuli' : 2,
-'add_Russo_random_spike' : 1,
-'run_test_suite' : 1,
-'manual_test_to_screen' : 0,
-'plot_Boolean' : 1,
-'save_output_Boolean' : 1,
-'shuffle_Boolean' : 0}
+	'max_plot_time' : 0.4,
+	'excit_dim' : 5*5*2,
+	'number_of_presentations' : 50,
+	'duration_of_presentations' : 0.2,
+	'inhib_dim' : None,
+	'num_layers' : 3,
+	'num_stimuli' : 2,
+	'add_Russo_random_spike' : True,
+	'manual_test_to_screen' : False,
+	'plot_Boolean' : True,
+	'save_output_Boolean' : True,
+	'shuffle_Boolean' : False}
 
 
 #Loop through each stimulus
 def main(params):
 
-	if params['run_test_suite'] == 1:
-		test_suite(params)
-		print("All unit tests have successfully passed.")
+	test_suite(params)
 
-	for jj in range(0, params['num_stimuli']):
+	for jj in range(params['num_stimuli']):
 		(spike_ids, spike_times) = load_spikes(jj) #NB that neurons IDs begin at 1
 
-		if params['shuffle_Boolean'] == 1:
-			np.random.shuffle(spike_ids)
+		if params['shuffle_Boolean'] == True:
+			spike_ids = shuffle_spikes(params, spike_ids, spike_times)
 
 		extracted_mask = extract_mask(params, spike_ids)
 
@@ -59,25 +61,45 @@ def main(params):
 
 		Russo_array = populate_Russo(params, extracted_ids, extracted_times, Russo_array)
 
-		if params['plot_Boolean'] == 1:
+		if params['plot_Boolean'] == True:
 			#The plot function will generate a RunTime warning due to a NaN comparison; however, the expected output of this code is correct, so the warning is not displayed
 			with warnings.catch_warnings():
 				warnings.simplefilter("ignore")
 				plot_Russo(params, Russo_array, jj)
 
-		if params['save_output_Boolean'] == 1:
-			if params['shuffle_Boolean'] == 1:
+		if params['save_output_Boolean'] == True:
+			if params['shuffle_Boolean'] == True:
 				np.savetxt("./Processing_Data/shuffled_posttraining_stim" + str(jj+1) + "_layer" + str(params['extracted_layer']) + "_Russo.csv", Russo_array, delimiter=',')
 			else:
 				np.savetxt("./Processing_Data/posttraining_stim" + str(jj+1) + "_layer" + str(params['extracted_layer']) + "_Russo.csv", Russo_array, delimiter=',')
 
-	return 0
+	return None
 
 #Load spike ids and times
 def load_spikes(stimuli_iter):
 	spike_ids = np.genfromtxt('./Processing_Data/output_spikes_posttraining_stim' + str(stimuli_iter+1) +'SpikeIDs.txt')
 	spike_times = np.genfromtxt('./Processing_Data/output_spikes_posttraining_stim' + str(stimuli_iter+1) +'SpikeTimes.txt')
 	return (spike_ids, spike_times)
+
+#Within each stimulus presentation, shuffle the association between spike IDs and their spike times, so that spikes still occur at different times, but with different neurons
+#This maintains each neuron's firing rate, but breaks any temporal associations between a particular neuron and a particular spike time
+def shuffle_spikes(params, spike_ids, spike_times):
+	shuffled_ids = []
+
+	print(spike_times[-100:])
+
+	#Iterate through all time-windows; note the addition of 1, as the last presentation is still associated with a window
+	for ii in range(params['number_of_presentations']+1):
+
+		#Find the indices of spikes in the given window of interest, and use these indices to extract the neuron IDs that spiked in the window
+		temp_IDs = spike_ids[np.where((ii*params['duration_of_presentations'] < spike_times) & (spike_times <= (ii+1)*params['duration_of_presentations']))]
+
+		#Shuffle those IDs and append them
+		np.random.shuffle(temp_IDs)
+		shuffled_ids.extend(temp_IDs)
+
+	assert len(shuffled_ids) == len(spike_ids), "Size of spike ID array not preserved after shuffling."
+	return np.asarray(shuffled_ids)
 
 #Return extraction mask defining the spikes of interest
 def extract_mask(params, spike_ids):
