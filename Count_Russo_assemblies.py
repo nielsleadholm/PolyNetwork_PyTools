@@ -16,6 +16,7 @@ import time
 #epsilon0 : primary cut-off margin for spike times in assembly search, given in seconds; note it covers both sides of the prescribed spike times, so an epsilon of 3ms corresponds to a bin/window of 3ms total, with 1.5ms on either side
 #Russo_bin_size : the temporal resolution (bin size) in seconds used when running the Russo algorithm
 #network_layer : the layer that should be analysed
+#group_dim : if using the 'binary network' architecture, group_dim, should be the size of one side of the stream's population, not both combined
 #number_of_presentations : how many times each stimulus is presented in the datasets
 #duration_of_presentations : length of each stimulus presentation, in seconds
 #shuffle_Boolean: load dataset where spikes have been shuffled in time, preserving firing rates but breaking any temporal relations
@@ -218,10 +219,9 @@ def analysis_epsilon(params, Russo_assembly_times, Russo_assembly_ids, spike_dat
 def information_theory_scanning(params, activation_array):
 	#For each stimulus, given that it has been presented, determine whether each assembly was active
 	activation_counter = 0
-	for ii in range(0, params['number_of_presentations']):
-	#Extract from assembly_activations if the assembly had any activations in that interval, and if it did then record a 1, 0 otherwise
+	for ii in range(params['number_of_presentations']+1):
+		#Extract from assembly_activations if the assembly had any activations in that interval, and if it did then record a 1, 0 otherwise
 		activation_counter += np.any((activation_array[1, :] >= (ii*params['duration_of_presentations'])) & (activation_array[1, :] < ((ii+1)*params['duration_of_presentations'])))
-	
 	#Final activation_counter provides a value containing the number of presentations when the assembly was active
 	return activation_counter
 
