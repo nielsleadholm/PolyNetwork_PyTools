@@ -75,11 +75,13 @@ def main(params):
 
 	return None
 
+
 #Load spike ids and times
 def load_spikes(stimuli_iter):
 	spike_ids = np.genfromtxt('./Processing_Data/output_spikes_posttraining_stim' + str(stimuli_iter+1) +'SpikeIDs.txt')
 	spike_times = np.genfromtxt('./Processing_Data/output_spikes_posttraining_stim' + str(stimuli_iter+1) +'SpikeTimes.txt')
 	return (spike_ids, spike_times)
+
 
 #Within each stimulus presentation, shuffle the association between spike IDs and their spike times, so that spikes still occur at different times, but with different neurons
 #This maintains each neuron's firing rate, but breaks any temporal associations between a particular neuron and a particular spike time
@@ -101,11 +103,13 @@ def shuffle_spikes(params, spike_ids, spike_times):
 	assert len(shuffled_ids) == len(spike_ids), "Size of spike ID array not preserved after shuffling."
 	return np.asarray(shuffled_ids)
 
+
 #Return extraction mask defining the spikes of interest
 def extract_mask(params, spike_ids):
 	#Return an array of indeces for the neurons in the layer of interest
 	extracted_mask = np.where((params['excit_dim']*(params['extracted_layer']-1) < spike_ids) & (spike_ids <= params['extracted_layer']*params['excit_dim'])) 
 	return extracted_mask
+
 
 #Extract and format spike ids and times of interest
 def extract_spikes(spike_ids, spike_times, extracted_mask):
@@ -117,11 +121,13 @@ def extract_spikes(spike_ids, spike_times, extracted_mask):
 	
 	return (extracted_ids, extracted_times)
 
+
 #Initialize a NaN array with rows = number of unique neurons in the layer, and columns = number of spikes of the maximally active neuron
 def initialize_Russo(params, max_spikes):
 	Russo_array = np.zeros([params['excit_dim'], max_spikes])
 	Russo_array[:, :] = np.nan
 	return Russo_array
+
 
 #Iterate through each neuron of interest, inserting its spikes into the Russo-suitable array; if a neuron never spikes, insert a single random spike
 def populate_Russo(params, extracted_ids, extracted_times, Russo_array):
@@ -137,6 +143,7 @@ def populate_Russo(params, extracted_ids, extracted_times, Russo_array):
 	    Russo_array[ii, 0] = np.random.random()*np.max(extracted_times) #Assigns the neuron a single spike, the time of which is sampled from a continuous uniform distribution
 
 	return(Russo_array)
+
 
 def plot_Russo(params, Russo_array, stimuli_iter):
 	plt.figure(stimuli_iter)
