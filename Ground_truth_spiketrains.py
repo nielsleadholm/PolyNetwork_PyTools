@@ -14,30 +14,44 @@ import matplotlib
 
 params = {'number_of_presentaitons' : 50,
 	'duration_of_presentations' : 0.2,
-	'jitter_std' : 0.003,
-	'Poisson_rate' : 50}
+	'jitter_std' : 0.0,
+	'Poisson_rate' : 25,
+	'refractory_duration' : 0.003}
 
 def main(params):
 
 	#Create array for all the spiking data
-	spike_IDs = []
-	spike_times = []
 
 	assembly_IDs, assembly_times = create_assemblies()
 
-	#Iterate through the number of stimuli presentations
-	for presentation_iter in range(params['number_of_presentaitons']):
-		#Generate the spike times for each assembly in the presentation window
-		temp_spike_IDs, temp_spike_times = generate_window_spikes(params, presentation_iter, assembly_IDs, assembly_times)
-		
-		#Sort these
-		sorted_spike_IDs, sorted_spike_times = sort_spikes(temp_spike_IDs, temp_spike_times)
+	for stimulus_iter in range(2):
+		spike_IDs = []
+		spike_times = []
 
-		#Add spikes drawn from Poisson firing rate
-		# window_spike_IDs, window_spike_times = add_Poisson_firing(params, sorted_spike_IDs, sorted_spike_times)
+		#Iterate through the number of stimuli presentations
+		for presentation_iter in range(params['number_of_presentaitons']):
+			#Generate the spike times for each assembly in the presentation window
+			temp_spike_IDs, temp_spike_times = generate_window_spikes(params, presentation_iter, stimulus_iter, assembly_IDs, assembly_times)
 
-		# spike_IDs.extend(window_spike_IDs)
-		# spike_times.extend(window_spike_times)
+			#Sort these
+			sorted_spike_IDs, sorted_spike_times = sort_spikes(temp_spike_IDs, temp_spike_times)
+
+			#Add spikes drawn from Poisson firing rate such that the firing rate of each neuron in the window is at the desired threshold
+			window_spike_IDs, window_spike_times = add_Poisson_firing(params, presentation_iter, sorted_spike_IDs, sorted_spike_times)
+
+			spike_IDs.extend(window_spike_IDs)
+			spike_times.extend(window_spike_times)
+
+
+		spike_IDs = np.asarray(spike_IDs)
+		spike_times = np.asarray(spike_times)
+
+		mask = spike_times <1.0
+		plt.scatter(spike_times[mask], spike_IDs[mask])
+		plt.show()
+
+		np.savetxt('Processing_Data/output_spikes_posttraining_stim' + str(stimulus_iter+1) + 'SpikeIDs.txt', spike_IDs)
+		np.savetxt('Processing_Data/output_spikes_posttraining_stim' + str(stimulus_iter+1) + 'SpikeTimes.txt', spike_times)
 
 	return None
 
@@ -69,62 +83,54 @@ def create_assemblies():
 
 	return assembly_IDs, assembly_times
 
-#*** choosing the data format
-#Has to be in the format of Spike output (one array for times and one for IDs), otherwise integration test won't include the Reshape for Russo
-#This will also make adding noise for a and b below easier
-#This should also be easy to implement for inserting each assembly
-#The main compication here is to ensure that the spike times are ordered as ascending; could begin by randomly finding the spike times for 
-# all the assemblies, then using a sort function; this will only be 25 items to sort, so should be manageable; this same ordering then needs to be applied
-# to the neuron IDs
-#When adding the Poisson spikes, this should be a bit easier, because after randomly sampling a spike, it can just be inserted in place (i.e. between
-# whatever values it falls within)
 
 #For each assembly, generate the spikes that occur within the given presentation window
-def generate_window_spikes(params, presentation_iter, assembly_IDs, assembly_times):
+def generate_window_spikes(params, presentation_iter, stimulus_iter, assembly_IDs, assembly_times):
 
 	temp_spike_times = []
 	temp_spike_IDs = []
 
-	#Iterate through each stimulus
-	for stimulus_iter in range(2):
+	if stimulus_iter == 0:
 		#Iterate through each assembly
-		if stimulus_iter == 0:
-			for assembly_iter in range(5):
-				#All assemblies but number 3 always occur for stimulus 1; assembly 3 has a 50% probability of occuring
-				if assembly_iter==2 and np.random.random()<=0.5:
-					pass
-				else:
-					#The start time of an assembly's activation is determined by a uniform distriution over the current presentation window
-					#It is offset by the current presentation iteration, and some additional noise (jitter) is added to each spike-time
-					temp_spike_times.extend(np.random.random()*params['duration_of_presentations'] + 
-						assembly_times[assembly_iter,:] + 
-						presentation_iter*params['duration_of_presentations'] +
-						np.random.normal(0, params['jitter_std'], size=5))
-					temp_spike_IDs.extend(assembly_IDs[assembly_iter,:])
-		if stimulus_iter == 1:
-			for assembly_iter in range(5):
-				#Assembly 3 has a 50% probability of occuring
-				if assembly_iter==2 and np.random.random()<=0.5:
-					pass
-				#Assembly 1 and 4 never occur for stimulus 2
-				elif assembly_iter == 0 or assembly_iter == 3:
-					pass
-				#Assembly 5 always occurs, but the neuron IDs are shifted
-				elif assembly_iter==4:
-					temp_spike_times.extend(np.random.random()*params['duration_of_presentations'] + 
-						assembly_times[assembly_iter,:] + 
-						presentation_iter*params['duration_of_presentations'] +
-						np.random.normal(0, params['jitter_std'], size=5))
-					temp_spike_IDs.extend(assembly_IDs[assembly_iter,:]+25)
-				#Assembly 2 always occurs for stimulus 2
-				else:
-					temp_spike_times.extend(np.random.random()*params['duration_of_presentations'] + 
-						assembly_times[assembly_iter,:] + 
-						presentation_iter*params['duration_of_presentations'] +
-						np.random.normal(0, params['jitter_std'], size=5))
-					temp_spike_IDs.extend(assembly_IDs[assembly_iter,:])
+		for assembly_iter in range(5):
+			#All assemblies but number 3 always occur for stimulus 1; assembly 3 has a 50% probability of occuring
+			if assembly_iter==2 and np.random.random()<=0.5:
+				pass
+			else:
+				#The start time of an assembly's activation is determined by a uniform distriution over the current presentation window
+				# - note this window is slightly shortened by the maximum lag in an assembly, ensuring it's activity remains in the window
+				#It is offset by the current presentation iteration, and some additional noise (jitter) is added to each spike-time
+				temp_spike_times.extend(np.random.random()*(params['duration_of_presentations']-0.015) + 
+					assembly_times[assembly_iter,:] + 
+					presentation_iter*params['duration_of_presentations'] +
+					np.random.normal(0, params['jitter_std'], size=5))
+				temp_spike_IDs.extend(assembly_IDs[assembly_iter,:])
+
+	if stimulus_iter == 1:
+		for assembly_iter in range(5):
+			#Assembly 3 has a 50% probability of occuring
+			if assembly_iter==2 and np.random.random()<=0.5:
+				pass
+			#Assembly 1 and 4 never occur for stimulus 2
+			elif assembly_iter == 0 or assembly_iter == 3:
+				pass
+			#Assembly 5 always occurs, but the neuron IDs are shifted
+			elif assembly_iter==4:
+				temp_spike_times.extend(np.random.random()*(params['duration_of_presentations']-0.015) + 
+					assembly_times[assembly_iter,:] + 
+					presentation_iter*params['duration_of_presentations'] +
+					np.random.normal(0, params['jitter_std'], size=5))
+				temp_spike_IDs.extend(assembly_IDs[assembly_iter,:]+25)
+			#Assembly 2 always occurs for stimulus 2
+			else:
+				temp_spike_times.extend(np.random.random()*(params['duration_of_presentations']-0.015) + 
+					assembly_times[assembly_iter,:] + 
+					presentation_iter*params['duration_of_presentations'] +
+					np.random.normal(0, params['jitter_std'], size=5))
+				temp_spike_IDs.extend(assembly_IDs[assembly_iter,:])
 
 	return temp_spike_IDs, temp_spike_times
+
 
 def sort_spikes(temp_spike_IDs, temp_spike_times):
 
@@ -140,24 +146,26 @@ def add_Poisson_firing(params, presentation_iter, sorted_spike_IDs, sorted_spike
 
 	#Iterate through each neuron; remember that they are indexed in spike_IDs from 1, not 0
 	for neuron_iter in range(50):
-		firing_rate = 0
+		#Extract the number of spikes associated with that neuron, and calculate it's rate
+		firing_rate = np.sum(sorted_spike_IDs==neuron_iter+1)/params['duration_of_presentations']
 		#While its firing rate is below the desired threshold, continue adding spikes
 		while firing_rate < params['Poisson_rate']:
-			#Extract the number of spikes associated with that neuron, and calculate it's rate
-			print(np.where(sorted_spike_IDs==neuron_iter+1))
 
-			firing_rate = np.sum(np.where(sorted_spike_IDs==neuron_iter+1))/params['duration_of_presentations']
-			print(firing_rate)
-			return 0
+			#Generate a spike time from a uniform random distrubtion, over the interval of interest (i.e. Poisson-like)
+			spike_time = np.random.random()*params['duration_of_presentations'] + presentation_iter*params['duration_of_presentations']
 
-	#Offset the added spikes by the current presentation iter
+			current_times = sorted_spike_times[np.where(sorted_spike_IDs==neuron_iter+1)]
+			#If a randomly sampled neuron fires at the same time as a neuron that is already firing (within the refractory period), then re-draw that sample
+			if np.any((current_times >= spike_time-params['refractory_duration']) & (current_times <= spike_time+params['refractory_duration'])):
+				pass
+			else:
+				insertion_index = np.searchsorted(sorted_spike_times, spike_time)
+				sorted_spike_times = np.insert(sorted_spike_times, insertion_index, spike_time)
+				sorted_spike_IDs = np.insert(sorted_spike_IDs, insertion_index, neuron_iter+1)
+				assert len(sorted_spike_IDs) == len(sorted_spike_times), "Number of insertions unequal."
+				firing_rate = np.sum(sorted_spike_IDs==neuron_iter+1)/params['duration_of_presentations']
 
-	#If a randomly sampled neuron fires at the same time as a neuron that is already firing (within the refractory period), then re-draw that sample
-
-
-
-
-	return window_spike_IDs, window_spike_times
+	return sorted_spike_IDs, sorted_spike_times
 
 main(params)
 

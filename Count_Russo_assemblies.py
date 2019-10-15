@@ -27,7 +27,7 @@ import time
 params = {'epsilon0' : 0.005,
 	'Russo_bin_size' : 0.003,
 	'number_stimuli' : 2,
-	'network_layer': 3,
+	'network_layer': 1,
 	'group_dim': 5*5,
 	'number_of_presentations' : 50,
 	'duration_of_presentations' : 0.2,
@@ -51,7 +51,7 @@ def main(params):
 
 	#Initialize array to hold results from iterating the epsilon value; the final value corresponds to the total number of steps that are taken, as an integer value
 	epsilon_results = np.empty([params['number_stimuli'], params['number_stimuli'], number_Russo_assemblies, int((params['epsilon_max']-params['epsilon0'])/params['epsilon_iter_step'])]) 
-	information_theory_data = np.empty([params['number_stimuli'], number_Russo_assemblies])
+	information_theory_data = np.zeros([params['number_stimuli'], number_Russo_assemblies])
 
 	#Iterate through each data set; note the stimulus file names are indexed from 1
 	for dataset_iter in range (params['number_stimuli']):
@@ -161,6 +161,7 @@ def find_assembly_activations(params, Russo_assembly_times, Russo_assembly_ids, 
 def create_boundaries(epsilon, Russo_assembly_times, candidate_activations, number_candidate_assemblies, synchrony_bool):
 	
 	#If checking for information/precision in a 'synchronous assembly' (i.e. assuming lags between neuron spikes were not significant), set assembly times to a zero vector
+
 	if synchrony_bool == True:
 		Russo_assembly_times[1:] = np.zeros(len(Russo_assembly_times[1:]))
 
@@ -223,6 +224,7 @@ def information_theory_scanning(params, activation_array):
 		#Extract from assembly_activations if the assembly had any activations in that interval, and if it did then record a 1, 0 otherwise
 		activation_counter += np.any((activation_array[1, :] >= (ii*params['duration_of_presentations'])) & (activation_array[1, :] < ((ii+1)*params['duration_of_presentations'])))
 	#Final activation_counter provides a value containing the number of presentations when the assembly was active
+	
 	return activation_counter
 
 

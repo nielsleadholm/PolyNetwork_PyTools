@@ -25,19 +25,18 @@ import warnings
 #random_test_to_screen prints to screen additional tests that require visual inspection by the user
 #shuffle_Boolean randomly shuffles the neuron ids locations, so that their firing rates remain the same, but any fixed temporal relationships are broken
 
-params = {'extracted_layer' : 3,
+params = {'extracted_layer' : 1,
 	'max_plot_time' : 0.4,
 	'excit_dim' : 5*5*2,
 	'number_of_presentations' : 50,
 	'duration_of_presentations' : 0.2,
 	'inhib_dim' : None,
-	'num_layers' : 3,
 	'num_stimuli' : 2,
 	'add_Russo_random_spike' : True,
 	'manual_test_to_screen' : False,
 	'plot_Boolean' : True,
 	'save_output_Boolean' : True,
-	'shuffle_Boolean' : False}
+	'shuffle_Boolean' : True}
 
 
 #Loop through each stimulus
@@ -88,8 +87,6 @@ def load_spikes(stimuli_iter):
 def shuffle_spikes(params, spike_ids, spike_times):
 	shuffled_ids = []
 
-	print(spike_times[-100:])
-
 	#Iterate through all time-windows; note the addition of 1, as the last presentation is still associated with a window
 	for ii in range(params['number_of_presentations']+1):
 
@@ -137,7 +134,6 @@ def populate_Russo(params, extracted_ids, extracted_times, Russo_array):
 
 	  #Use the mask to identify all the spike times associated with that neuron, and assign it to Russo_array
 	  Russo_array[ii, 0:(np.size(np.take(extracted_times, temp_mask)))] = np.take(extracted_times, temp_mask)
-	  #print(Russo_array[ii, 0:-1])
 
 	  if ((math.isnan(Russo_array[ii, 0]) == 1) and (params['add_Russo_random_spike'] == 1)): #If the first element is NaN, the entire row is (i.e. the neuron never spiked)
 	    Russo_array[ii, 0] = np.random.random()*np.max(extracted_times) #Assigns the neuron a single spike, the time of which is sampled from a continuous uniform distribution
