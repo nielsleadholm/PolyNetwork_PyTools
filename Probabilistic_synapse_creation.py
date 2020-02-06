@@ -18,8 +18,8 @@ import matplotlib.pyplot as plt
 #ffTrue_latFalse_bool determines if feed-forward or lateral connections should be generated (set to True if the former)
 #num_layers should *not* include the input source layer
 #simulation_timestep is used to ensure delays do not fall below the minimum time-resoluton of the Spike simulator
-params = {'ips_prob_connection' : 0.90,
-'contra_prob_connection' : 0.001,
+params = {'ips_prob_connection' : 0.8,
+'contra_prob_connection' : 0.2,
 'mult_synapses' : 1,
 'delay_mean' : 3.4,
 'delay_std' : 2.3,
@@ -96,7 +96,7 @@ def generate_weights(params, num_connections):
 
 	for ii in range(num_connections):
 		for jj in range(params['mult_synapses']):
-			#Asign each synapse a weight that is uniformly distributed between the mean and max weight range
+			#Asign each synapse a weight that is uniformly distributed between the min and max weight range
 			weights_list.append((params['weight_max'] - params['weight_min']) * np.random.uniform() + params['weight_min'])
 
 	return weights_list
